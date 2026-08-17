@@ -2,3 +2,6 @@
 	path = src/ROS-TCP-Endpoint
 	url = https://github.com/Unity-Technologies/ROS-TCP-Endpoint.git
 	branch = main-ros2
+[submodule "src/com3_ros"]
+	path = src/com3_ros
+	url = https://github.com/pwri-opera/com3_ros.git
