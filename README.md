@@ -29,3 +29,6 @@
 
 3. ROS Topicを介して通信  
     上記手順を踏み、OperaSim側とROS2側の通信が確認出来たら、ROS Topic等を介して操作を行うことが出来る。
+
+## 各スクリプトのREADME
+- episode_runner.py : [データ収集用数リプとに関して](/docs/dataset.md)
