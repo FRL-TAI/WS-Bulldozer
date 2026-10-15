@@ -1,7 +1,9 @@
-"""シミュレータ（OperaSim-AGX）との ROS2 通信をまとめたノード。"""
+"""
+シミュレータ（OperaSim-AGX）との ROS2 通信をまとめたノード
+"""
+
 import json
 import math
-import threading
 import time
 
 from com3_msgs.msg import JointCmd
@@ -24,12 +26,11 @@ def quat_to_rpy(q):
 
 class SimInterface(Node):
     def __init__(self):
-        super().__init__("bull_ope",
-                         parameter_overrides=[Parameter("use_sim_time", value=True)])
-        self.blade = None     # blade_state の最新値 {名前: 値}
-        self.joints = None    # joint_states の最新値 {"lift_joint_pos": …}
-        self.pose = None      # global_pose の最新値 {"x": …}
-        self.status = None    # episode_status の最新値（dict）
+        super().__init__("bull_ope", parameter_overrides=[Parameter("use_sim_time", value=True)])
+        self.blade  = None  # blade_state    の最新値 {名前: 値}
+        self.joints = None  # joint_states   の最新値 {"lift_joint_pos": …}
+        self.pose   = None  # global_pose    の最新値 {"x": …}
+        self.status = None  # episode_status の最新値（dict）
         self.cmd_vx = 0.0
         self.cmd_lift = 0.0
         self.blade_listeners = []   # blade_state を受信するたびに呼ぶ関数（記録用）
@@ -43,7 +44,8 @@ class SimInterface(Node):
         self.pub_blade = self.create_publisher(JointCmd, C.TOPIC_BLADE_CMD, 10)
         self.pub_episode = self.create_publisher(String, C.TOPIC_EPISODE_CMD, 10)
 
-    # ------------------------------------------------------------------ 受信
+
+    # ----- 受信 -----
     def _on_blade(self, msg):
         if msg.layout.dim and msg.layout.dim[0].label:
             names = msg.layout.dim[0].label.split(",")
@@ -77,7 +79,8 @@ class SimInterface(Node):
         except json.JSONDecodeError:
             self.get_logger().warn(f"episode_status を解釈できません: {msg.data[:200]}")
 
-    # ------------------------------------------------------------------ 時間
+
+    # ----- 時間 -----
     def now(self):
         """シミュレーション時刻 [s]"""
         return self.get_clock().now().nanoseconds * 1e-9
@@ -100,7 +103,8 @@ class SimInterface(Node):
             time.sleep(0.1)
         raise TimeoutError(f"トピックが届きません: {missing}。Unity が Play 中か確認してください")
 
-    # ------------------------------------------------------------------ 指令
+
+    # ----- 送信 -----
     def send_vel(self, v):
         self.cmd_vx = float(v)
         msg = Twist()
@@ -123,10 +127,10 @@ class SimInterface(Node):
         self.pub_blade.publish(msg)
 
     def stop_all(self):
+        """車体の速度とブレードの操作を停止させる"""
         self.send_vel(0.0)
         self.send_lift_velocity(0.0)
 
-    # ------------------------------------------------------------------ エピソード管理
     def setup_episode(self, episode, index, total):
         """土質パラメータの設定・地形のリセット・地形の加工を Unity に依頼し、完了の応答を返す"""
         self._request_id += 1

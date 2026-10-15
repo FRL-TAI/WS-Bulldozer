@@ -1,7 +1,15 @@
-"""1つのエピソードを実行する共通処理（collect_data と test_episode の両方から使う）。
+"""
+1つのエピソードを実行する共通処理 ( collect_data, test_episode の両方から使う)
 
-流れ：設定・地形リセット → 地面高さの計測 → 記録開始 → 排土板を下げる → 走行
-      → 排土板を上げる → 記録終了 → スタート位置へ後退
+流れ：
+1. 設定・地形リセット
+2. 地面高さの計測
+3. 記録開始
+4. 排土板を下げる
+5. 走行
+6. 排土板を上げる
+7. 記録終了
+8. スタート位置へ後退
 """
 import math
 
@@ -21,7 +29,7 @@ class EpisodeRunner:
         self.iface = iface
         self.recorder = Recorder(iface)
 
-    # ------------------------------------------------------------------ 補助
+    # ----- 補助関数 -----
     def _phase(self, phase):
         self.recorder.phase = phase
         self.iface.set_phase(phase)
@@ -69,7 +77,7 @@ class EpisodeRunner:
     def run(self, episode, index, total, csv_path=None, on_tick=None):
         iface = self.iface
 
-        # 1) 設定・地形のリセット・地形の加工
+        # 1. 設定・地形のリセット・地形の加工
         st = iface.setup_episode(episode, index, total)
         self._check_soil(episode, st)
         if episode.REQUIRES_GRID_CONTROL and not st.get("grid_control_enabled"):
@@ -78,7 +86,7 @@ class EpisodeRunner:
             raise SkipEpisode(f"地形の加工が適用されませんでした（Unity のエラー: {st.get('error')}）")
         iface.sleep_sim(C.SETTLE_TIME)
 
-        # 2) 基準の地面高さと開始位置
+        # 2. 基準の地面高さと開始位置
         h0 = self._measure_ground()
         x0, y0 = iface.pose["x"], iface.pose["y"]
         labels = {
@@ -90,12 +98,12 @@ class EpisodeRunner:
         }
         meta = {"episode_index": index, "episode_name": episode.name, "seed": episode.seed}
 
-        # 3) 記録開始
+        # 3. 記録開始
         if csv_path:
             self.recorder.start(csv_path, h0, (x0, y0), labels, meta)
         summary = {"ground_h0": h0, **labels}
         try:
-            # 4) 停止したまま排土板を初期深さまで下げる
+            # 4. 停止したまま排土板を初期深さまで下げる
             self._phase("lowering")
             t0 = iface.now()
             first = episode.operation(self._observe(t0, h0, x0, y0))
@@ -105,7 +113,7 @@ class EpisodeRunner:
                     break
                 iface.sleep_sim(C.CONTROL_PERIOD)
 
-            # 5) 走行
+            # 5. 走行
             self._phase("running")
             t0 = iface.now()
             while True:
@@ -122,7 +130,7 @@ class EpisodeRunner:
             summary["run_time"] = obs.t
             summary["run_distance"] = obs.distance
 
-            # 6) 停止して排土板を上げる
+            # 6. 停止して排土板を上げる
             self._phase("raising")
             iface.send_vel(0.0)
             t0 = iface.now()
@@ -134,7 +142,7 @@ class EpisodeRunner:
             summary.update(self.recorder.stop())
             iface.stop_all()
 
-        # 7) スタート位置へ後退
+        # 7. スタート位置へ後退
         self._phase("returning")
         t0 = iface.now()
         while iface.now() - t0 < C.RETURN_TIMEOUT:

@@ -18,7 +18,7 @@ DATA_DIR = os.environ.get(
 
 # ---------------- 排土板の制御 ----------------
 LIFT_JOINT = "lift_joint"
-LIFT_SIGN = 1          # `test_episode --calibrate` の結果に合わせて 1 か -1 にする
+LIFT_SIGN = -1         # `test_episode --calibrate` の結果に合わせて 1 か -1 にする
 LIFT_KP = 1.0          # 刃先高さの P 制御ゲイン
 LIFT_VMAX = 0.1        # lift_joint に送る速度指令の上限
 CONTROL_PERIOD = 0.05  # 制御周期 [s]（シミュレーション時刻）

@@ -1,14 +1,13 @@
 """
-エピソードの抽象クラス。
+エピソードの抽象クラス
 
 1つのエピソードは次の4つで定義される。
   - name            : エピソード名
-  - soil            : 土質パラメータ（SoilParams）
+  - soil            : 土質パラメータ(SoilParams)
   - terrain_ops()   : 地形データ（リセット後の地形に加える加工。既定は平らな地形のまま）
   - operation(obs)  : 操作（各時刻の観測から、車速と目標切削深さを返す）
 
 新しいエピソードを作るときは specific/ に Episode を継承したクラスを書くだけでよい
-（collect_data / test_episode が自動で見つける）。
 """
 from __future__ import annotations
 
@@ -25,8 +24,8 @@ class SoilParams:
     cohesion: float                         # 粘着力 c [Pa]
     friction_angle_deg: float               # 内部摩擦角 φ [deg]（地山の状態での基本値）
     density: float                          # 地山の密度 ρ0 [kg/m^3]
-    swell_factor: Optional[float] = None    # 膨張率 [-]。None なら Unity 側の値のまま
-    youngs_modulus: Optional[float] = None  # ヤング率 E0 [Pa]。None なら Unity 側の値のまま
+    swell_factor: Optional[float] = None    # 膨張率 [-]. None なら Unity 側の値のまま
+    youngs_modulus: Optional[float] = None  # ヤング率 E0 [Pa]. None なら Unity 側の値のまま
 
     def to_msg_dict(self) -> dict:
         # Unity 側では負の値を「変更しない」と解釈する
@@ -110,7 +109,7 @@ class Episode(ABC):
     # ---- 操作 ----
     @abstractmethod
     def operation(self, obs: Observation) -> Command:
-        ...
+        pass
 
     def is_done(self, obs: Observation) -> bool:
         return obs.distance >= self.MAX_DISTANCE or obs.t >= self.TIMEOUT
