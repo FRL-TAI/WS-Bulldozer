@@ -121,7 +121,7 @@ class EpisodeRunner:
                 if episode.is_done(obs):
                     break
                 cmd = episode.operation(obs)
-                iface.send_vel(cmd.speed)
+                iface.send_vel(cmd.speed, cmd.yaw_rate)
                 target = h0 - cmd.depth if cmd.depth is not None else h0 + C.RAISE_HEIGHT
                 err = self._lift_control(target)
                 if on_tick:

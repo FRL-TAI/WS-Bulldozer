@@ -78,7 +78,7 @@ class Recorder:
             row.update(blade)
             row.update(joints)
             row.update(pose)
-            row.update(cmd_vx=self.iface.cmd_vx, cmd_lift=self.iface.cmd_lift)
+            row.update(cmd_vx=self.iface.cmd_vx, cmd_wz=self.iface.cmd_wz, cmd_lift=self.iface.cmd_lift)
             row.update(ground_h0=self.ground_h0, depth=depth, speed=speed, distance=distance,
                        cut_volume=self.cut_volume, slip_ratio=slip)
             row.update(self.labels)

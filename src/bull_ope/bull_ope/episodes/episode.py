@@ -70,6 +70,7 @@ class Observation:
 class Command:
     """operation() が返す操作"""
     speed: float              # 前進速度 [m/s]
+    yaw_rate: float = 0.0     # 旋回の角速度 [rad/s]。正で左旋回（反時計回り）
     depth: Optional[float]    # 目標切削深さ [m]（元の地面基準）。None なら排土板を上げる
 
 

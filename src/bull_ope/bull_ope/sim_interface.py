@@ -32,6 +32,7 @@ class SimInterface(Node):
         self.pose   = None  # global_pose    の最新値 {"x": …}
         self.status = None  # episode_status の最新値（dict）
         self.cmd_vx = 0.0
+        self.cmd_wz = 0.0
         self.cmd_lift = 0.0
         self.blade_listeners = []   # blade_state を受信するたびに呼ぶ関数（記録用）
         self._request_id = int(time.time()) % 100000
@@ -105,10 +106,12 @@ class SimInterface(Node):
 
 
     # ----- 送信 -----
-    def send_vel(self, v):
+    def send_vel(self, v, w=0.0):
         self.cmd_vx = float(v)
+        self.cmd_wz = float(w)
         msg = Twist()
         msg.linear.x = self.cmd_vx
+        msg.angular.z = self.cmd_wz
         self.pub_vel.publish(msg)
 
     def send_lift_velocity(self, u):
