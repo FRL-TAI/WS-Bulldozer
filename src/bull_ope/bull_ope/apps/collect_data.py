@@ -25,9 +25,9 @@ import numpy as np
 import rclpy
 from rclpy.executors import MultiThreadedExecutor
 
-from . import config as C
-from .episode_runner import EpisodeRunner, SkipEpisode
-from .episodes import SoilParams, available_episodes
+from .. import config as C
+from ..core.runner import EpisodeRunner, SkipEpisode
+from ..episodes import SoilParams, available_episodes
 
 
 def lhs_soils(cls, n, rng):
@@ -96,7 +96,7 @@ def main():
         json.dump({"args": vars(a), "config": cfg, "num_episodes": len(plan)}, f, indent=2, ensure_ascii=False)
 
     rclpy.init()
-    from .sim_interface import SimInterface
+    from ..ros.sim_interface import SimInterface
     iface = SimInterface()
     ex = MultiThreadedExecutor()
     ex.add_node(iface)

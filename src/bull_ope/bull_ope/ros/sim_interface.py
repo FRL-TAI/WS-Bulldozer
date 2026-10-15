@@ -14,7 +14,7 @@ from rclpy.parameter import Parameter
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Float64MultiArray, String
 
-from . import config as C
+from .. import config as C
 
 
 def quat_to_rpy(q):

@@ -20,9 +20,9 @@ import numpy as np
 import rclpy
 from rclpy.executors import MultiThreadedExecutor
 
-from . import config as C
-from .episode_runner import EpisodeRunner, SkipEpisode
-from .episodes import SoilParams, available_episodes
+from .. import config as C
+from ..core.runner import EpisodeRunner, SkipEpisode
+from ..episodes import SoilParams, available_episodes
 
 # 点検結果で特に注目する列
 KEY_COLUMNS = [
@@ -118,7 +118,7 @@ def main():
         raise SystemExit(f"エピソード名を指定してください: {list(registry)}")
 
     rclpy.init()
-    from .sim_interface import SimInterface
+    from ..ros.sim_interface import SimInterface
     iface = SimInterface()
     ex = MultiThreadedExecutor()
     ex.add_node(iface)

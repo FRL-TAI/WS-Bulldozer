@@ -15,9 +15,9 @@ import math
 
 import numpy as np
 
-from . import config as C
-from .episodes import Observation
-from .recorder import Recorder
+from .. import config as C
+from ..episodes import Observation
+from ..recording.recorder import Recorder
 
 
 class SkipEpisode(Exception):

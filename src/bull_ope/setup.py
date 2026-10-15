@@ -24,8 +24,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'collect_data = bull_ope.collect_data:main',
-            'test_episode = bull_ope.test_episode:main',
+            'collect_data = bull_ope.apps.collect_data:main',
+            'test_episode = bull_ope.apps.test_episode:main',
         ],
     },
 )

@@ -8,7 +8,7 @@ import csv
 import math
 import threading
 
-from . import config as C
+from .. import config as C
 
 
 class Recorder:
