@@ -77,6 +77,10 @@ class EpisodeRunner:
     def run(self, episode, index, total, csv_path=None, on_tick=None):
         iface = self.iface
 
+        # 0. 実行できる条件か確認（Unity に依頼する前に判定する）
+        if episode.REQUIRES_GRID_CONTROL and not (iface.status or {}).get("grid_control_enabled"):
+            raise SkipEpisode("Unity 側で AGX_GRID_CONTROL が無効です")
+
         # 1. 設定・地形のリセット・地形の加工
         st = iface.setup_episode(episode, index, total)
         self._check_soil(episode, st)
