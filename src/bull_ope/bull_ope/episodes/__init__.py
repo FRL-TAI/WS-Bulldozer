@@ -12,10 +12,12 @@ __all__ = ["Episode", "SoilParams", "TerrainOp", "Observation", "Command", "avai
 def available_episodes():
     """{エピソード名: クラス} を返す"""
     found = {}
-    for info in pkgutil.iter_modules(specific.__path__):
-        module = importlib.import_module(f"{specific.__name__}.{info.name}")
+    # __path__ と __name__ はこのパッケージ（episodes）自身のもの。サブフォルダも含めてすべて探す
+    for info in pkgutil.walk_packages(__path__, prefix=__name__ + "."):
+        module = importlib.import_module(info.name)
         for _, cls in inspect.getmembers(module, inspect.isclass):
-            if issubclass(cls, Episode) and cls is not Episode and cls.name:
+            if (issubclass(cls, Episode) and cls.name and not inspect.isabstract(cls)
+                    and cls.__module__ == module.__name__):   # import しただけのクラスは数えない
                 if cls.name in found and found[cls.name] is not cls:
                     raise ValueError(f"エピソード名が重複しています: {cls.name}")
                 found[cls.name] = cls
