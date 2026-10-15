@@ -2,14 +2,16 @@
 1つのエピソードを実行する共通処理 ( collect_data, test_episode の両方から使う)
 
 流れ：
-1. 設定・地形リセット
+0. シーンの読み込み直し(機体・地形・AGX の状態をすべて初期状態に戻す)
+1. 設定（土質・地形の加工）
 2. 地面高さの計測
 3. 記録開始
 4. 排土板を下げる
 5. 走行
 6. 排土板を上げる
 7. 記録終了
-8. スタート位置へ後退
+
+開始位置への後退は行わない（次のエピソードの最初にシーンを読み込み直すため）。
 """
 import math
 
@@ -39,6 +41,14 @@ class EpisodeRunner:
         u = float(np.clip(C.LIFT_KP * err, -C.LIFT_VMAX, C.LIFT_VMAX))
         self.iface.send_lift_velocity(C.LIFT_SIGN * u)
         return err
+
+    def _sleep(self, x0, y0):
+        """制御周期だけ待つ。そのたびに、開始位置から離れすぎていないかを確認する"""
+        r = math.hypot(self.iface.pose["x"] - x0, self.iface.pose["y"] - y0)
+        if C.SAFE_RADIUS is not None and r > C.SAFE_RADIUS:
+            self.iface.stop_all()
+            raise RuntimeError(f"開始位置から {r:.1f} m 離れたため停止しました（SAFE_RADIUS = {C.SAFE_RADIUS} m）")
+        self.iface.sleep_sim(C.CONTROL_PERIOD)
 
     def _measure_ground(self, duration=0.5):
         vals = []
@@ -77,18 +87,21 @@ class EpisodeRunner:
     def run(self, episode, index, total, csv_path=None, on_tick=None):
         iface = self.iface
 
-        # 0. 実行できる条件か確認（Unity に依頼する前に判定する）
+        # 実行できる条件か確認（Unity に依頼する前に判定する）
         if episode.REQUIRES_GRID_CONTROL and not (iface.status or {}).get("grid_control_enabled"):
             raise SkipEpisode("Unity 側で AGX_GRID_CONTROL が無効です")
 
-        # 1. 設定・地形のリセット・地形の加工
+        # 0. シーンの読み込み直し（新しいシーンのトピックがそろうまで待つ）
+        self._phase("reloading")
+        iface.reload_scene()
+        iface.sleep_sim(C.RELOAD_SETTLE)          # AGX の地形などの初期化を待つ
+
+        # 1. 設定（土質・地形の加工）
         st = iface.setup_episode(episode, index, total)
         self._check_soil(episode, st)
-        if episode.REQUIRES_GRID_CONTROL and not st.get("grid_control_enabled"):
-            raise SkipEpisode("Unity 側で AGX_GRID_CONTROL が無効です")
         if episode.terrain_ops() and not st.get("ops_applied"):
             raise SkipEpisode(f"地形の加工が適用されませんでした（Unity のエラー: {st.get('error')}）")
-        iface.sleep_sim(C.SETTLE_TIME)
+        iface.sleep_sim(C.SETTLE_TIME)            # 機体が着地して落ち着くのを待つ
 
         # 2. 基準の地面高さと開始位置
         h0 = self._measure_ground()
@@ -105,7 +118,11 @@ class EpisodeRunner:
         # 3. 記録開始
         if csv_path:
             self.recorder.start(csv_path, h0, (x0, y0), labels, meta)
-        summary = {"ground_h0": h0, **labels}
+        summary = {
+            "ground_h0": h0, **labels,
+            # 開始位置・向き（読み込み直しで毎回同じ状態から始まっているかの記録）
+            "start_x": x0, "start_y": y0, "start_yaw_deg": math.degrees(iface.pose["yaw"]),
+        }
         try:
             # 4. 停止したまま排土板を初期深さまで下げる
             self._phase("lowering")
@@ -115,7 +132,7 @@ class EpisodeRunner:
             while iface.now() - t0 < C.LOWER_TIMEOUT:
                 if abs(self._lift_control(h0 - d0)) < C.LOWER_TOLERANCE:
                     break
-                iface.sleep_sim(C.CONTROL_PERIOD)
+                self._sleep(x0, y0)
 
             # 5. 走行
             self._phase("running")
@@ -130,7 +147,7 @@ class EpisodeRunner:
                 err = self._lift_control(target)
                 if on_tick:
                     on_tick(obs, cmd, err)
-                iface.sleep_sim(C.CONTROL_PERIOD)
+                self._sleep(x0, y0)
             summary["run_time"] = obs.t
             summary["run_distance"] = obs.distance
 
@@ -140,21 +157,12 @@ class EpisodeRunner:
             t0 = iface.now()
             while iface.now() - t0 < C.RAISE_TIME:
                 self._lift_control(h0 + C.RAISE_HEIGHT)
-                iface.sleep_sim(C.CONTROL_PERIOD)
+                self._sleep(x0, y0)
             iface.stop_all()
         finally:
+            # 7. 記録終了（エラーや Ctrl+C で止まった場合も必ず実行する）
             summary.update(self.recorder.stop())
             iface.stop_all()
 
-        # 7. スタート位置へ後退
-        self._phase("returning")
-        t0 = iface.now()
-        while iface.now() - t0 < C.RETURN_TIMEOUT:
-            if math.hypot(iface.pose["x"] - x0, iface.pose["y"] - y0) < C.RETURN_TOLERANCE:
-                break
-            iface.send_vel(-C.RETURN_SPEED)
-            self._lift_control(h0 + C.RAISE_HEIGHT)
-            iface.sleep_sim(C.CONTROL_PERIOD)
-        iface.stop_all()
         self._phase("done")
         return summary

@@ -165,6 +165,32 @@ class SimInterface(Node):
             time.sleep(0.05)
         raise TimeoutError("Unity から設定完了の応答がありません（SimEpisodeManager を確認）")
 
+    def reload_scene(self, timeout=None):
+        """Unity にシーンの読み込み直しを依頼し、新しいシーンのトピックがそろうまで待つ。
+
+        Unity の SimEpisodeManager は起動のたびに新しい boot_id を作って状態に含めるので、
+        boot_id が変わったことで「新しいシーンが立ち上がった」と判断する。
+        """
+        timeout = C.RELOAD_TIMEOUT if timeout is None else timeout
+        old = (self.status or {}).get("boot_id")
+        if old is None:
+            raise RuntimeError("episode_status に boot_id がありません（Unity の SimEpisodeManager を更新してください）")
+        self.pub_episode.publish(String(data=json.dumps({"command": "reload"})))
+
+        deadline = time.monotonic() + timeout
+        while True:
+            st = self.status
+            if st and st.get("boot_id") not in (None, old):
+                break
+            if time.monotonic() > deadline:
+                raise TimeoutError("シーンの読み込み直しが完了しません（Unity の Console を確認）")
+            time.sleep(0.05)
+
+        # 古いシーンの値を捨て、新しいシーンの値がそろうまで待つ
+        self.blade = self.joints = self.pose = None
+        self.cmd_vx = self.cmd_wz = self.cmd_lift = 0.0
+        self.wait_ready(timeout=max(1.0, deadline - time.monotonic()))
+
     def set_phase(self, phase):
         """Unity の表示ウィンドウに出す進行状況を更新する"""
         self.pub_episode.publish(String(data=json.dumps({"command": "phase", "phase": phase})))
