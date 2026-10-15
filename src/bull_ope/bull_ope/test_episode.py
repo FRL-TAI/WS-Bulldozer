@@ -1,11 +1,11 @@
 """特定のエピソードを1回だけテスト走行し、取得したデータを点検する。
 
 例：
-  ros2 run soil_data_collector test_episode --list
-  ros2 run soil_data_collector test_episode --calibrate          # 排土板の上げ下げの向きを確認
-  ros2 run soil_data_collector test_episode flat_constant --seed 3
-  ros2 run soil_data_collector test_episode flat_step --c 15000 --phi 30 --rho 1600
-  ros2 run soil_data_collector test_episode flat_constant --no-record
+  ros2 run bull_ope test_episode --list
+  ros2 run bull_ope test_episode --calibrate          # 排土板の上げ下げの向きを確認
+  ros2 run bull_ope test_episode flat_constant --seed 3
+  ros2 run bull_ope test_episode flat_step --c 15000 --phi 30 --rho 1600
+  ros2 run bull_ope test_episode flat_constant --no-record
 
 記録した場合は <DATA_DIR>/test/ に CSV を保存し、終了後に列ごとの統計（欠損・定数列など）を表示する。
 """

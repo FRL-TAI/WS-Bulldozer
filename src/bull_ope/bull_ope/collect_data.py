@@ -1,9 +1,9 @@
 """学習用データを収集する。
 
 例：
-  ros2 run soil_data_collector collect_data --list
-  ros2 run soil_data_collector collect_data --episodes flat_constant flat_sine --num 20 --sampling lhs
-  ros2 run soil_data_collector collect_data --episodes all --num 5 --run-name pilot
+  ros2 run bull_ope collect_data --list
+  ros2 run bull_ope collect_data --episodes flat_constant flat_sine --num 20 --sampling lhs
+  ros2 run bull_ope collect_data --episodes all --num 5 --run-name pilot
 
 出力（<DATA_DIR>/<実行名>/）：
   config.json      実行時の設定

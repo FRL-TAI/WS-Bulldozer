@@ -24,7 +24,7 @@ def quat_to_rpy(q):
 
 class SimInterface(Node):
     def __init__(self):
-        super().__init__("soil_data_collector",
+        super().__init__("bull_ope",
                          parameter_overrides=[Parameter("use_sim_time", value=True)])
         self.blade = None     # blade_state の最新値 {名前: 値}
         self.joints = None    # joint_states の最新値 {"lift_joint_pos": …}
