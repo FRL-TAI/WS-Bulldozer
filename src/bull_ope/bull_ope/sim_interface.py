@@ -108,13 +108,18 @@ class SimInterface(Node):
         self.pub_vel.publish(msg)
 
     def send_lift_velocity(self, u):
+        """lift_joint に速度指令を送る（tilt と angle は速度 0 で保持）。
+
+        OperaSim の BulldozerInput.SetCommands() は joint_name を見ず、
+        配列の [0]=lift, [1]=tilt, [2]=angle の順番で値を読むため、必ず3要素で送る。
+        """
         self.cmd_lift = float(u)
         msg = JointCmd()
-        msg.joint_name = [C.LIFT_JOINT]
+        msg.joint_name = ["lift_joint", "tilt_joint", "angle_joint"]   # 参考情報（OperaSim 側では未使用）
         msg.control_type = 1  # 0:position, 1:velocity, 2:effort
-        msg.position = [0.0]
-        msg.velocity = [self.cmd_lift]
-        msg.effort = [0.0]
+        msg.position = [0.0, 0.0, 0.0]
+        msg.velocity = [self.cmd_lift, 0.0, 0.0]
+        msg.effort = [0.0, 0.0, 0.0]
         self.pub_blade.publish(msg)
 
     def stop_all(self):
