@@ -73,7 +73,7 @@ class EpisodeRunner:
             if got is None or abs(got - want) > tol + 1e-6 * abs(want):
                 raise RuntimeError(f"{key} が反映されていません（要求 {want}, AGX {got}）")
 
-    # ------------------------------------------------------------------ 本体
+    # ----- 本体 -----
     def run(self, episode, index, total, csv_path=None, on_tick=None):
         iface = self.iface
 

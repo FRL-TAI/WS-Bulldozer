@@ -1,5 +1,5 @@
 """
-シミュレータ（OperaSim-AGX）との ROS2 通信をまとめたノード
+シミュレータ(OperaSim-AGX)との ROS2 通信をまとめたノード
 """
 
 import json
@@ -31,9 +31,11 @@ class SimInterface(Node):
         self.joints = None  # joint_states   の最新値 {"lift_joint_pos": …}
         self.pose   = None  # global_pose    の最新値 {"x": …}
         self.status = None  # episode_status の最新値（dict）
+
         self.cmd_vx = 0.0
         self.cmd_wz = 0.0
         self.cmd_lift = 0.0
+        
         self.blade_listeners = []   # blade_state を受信するたびに呼ぶ関数（記録用）
         self._request_id = int(time.time()) % 100000
 

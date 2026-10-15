@@ -56,7 +56,7 @@ class Recorder:
             dt = 0.0 if self.prev_t is None else max(0.0, sim_time - self.prev_t)
             self.prev_t = sim_time
 
-            # ---- 派生量 ----
+            # ----- 派生量 -----
             edge_z = blade.get("edge_z", float("nan"))
             depth = self.ground_h0 - edge_z
             speed = math.hypot(pose.get("vx", 0.0), pose.get("vy", 0.0))

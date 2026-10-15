@@ -20,49 +20,8 @@
 | `ros2 run bull_ope collect_data` | 複数のエピソードを順に実行し、学習用データを収集する |
 
 
-## 2. 構成
-### 2.1 ディレクトリ構成
-```
-bull_ope/
-├ package.xml, setup.py, setup.cfg, resource/    ROS2 パッケージの定義
-├ README.md
-├ data/                                           収集したデータの保存先
-└ bull_ope/
-   ├ episodes/
-   │  ├ __init__.py                               エピソードの一覧を自動で集める
-   │  ├ episode.py                                エピソードの抽象クラスと関連するデータ構造
-   │  └ specific/                                 各エピソードの定義
-   │     ├ flat_constant_depth.py
-   │     ├ flat_step_depth.py
-   │     ├ flat_sine_depth.py
-   │     └ compacted_strips.py
-   ├ collect_data.py                              データ収集（エントリポイント）
-   ├ test_episode.py                              テスト走行と点検（エントリポイント）
-   ├ episode_runner.py                            1エピソードの実行手順
-   ├ sim_interface.py                             シミュレータとの ROS2 通信
-   ├ recorder.py                                  時系列データの CSV 書き出し
-   └ config.py                                    設定値
-```
-
-### 2.2 各モジュールの役割と関係
-```
-collect_data.py ─┐                     ┌─ episodes/（何をするか：名前・土質・地形・操作）
-                 ├─→ episode_runner.py ┤
-test_episode.py ─┘   （どう実行するか）  ├─ sim_interface.py（ROS2 での送受信）
-                                       └─ recorder.py（CSV への記録）
-```
-
-| モジュール | 役割 |
-| --- | --- |
-| `episodes/` | **何をするか**を定義する。エピソードごとに、名前、土質パラメータ、地形の加工、操作（車速と目標切削深さ）を決める |
-| `episode_runner.py` | **どう実行するか**を担う。地形のリセット、排土板の上げ下げの制御、走行、記録の開始・終了、スタート位置への後退などの共通の手順 |
-| `sim_interface.py` | ROS2 ノード。トピックの受信と最新値の保持、指令の送信、Unity へのエピソード設定の依頼 |
-| `recorder.py` | `blade_state` を受信するたびに、その時点の全データを CSV に1行書き出す |
-| `config.py` | トピック名、制御ゲイン、待ち時間、保存先などの設定値 |
-| `collect_data.py` | 実行計画（どのエピソードを何回、どの土質で）を作り、`episode_runner` で順に実行する |
-| `test_episode.py` | 1エピソードを実行し、走行中の状況を表示し、終了後にデータを点検する |
-
-### 2.3 通信するトピック
+## 2. データの流れ
+### 2.1 通信するトピック
 | トピック | 型 | 向き | 内容 |
 | --- | --- | --- | --- |
 | `/d37pxi_24/blade_state` | `std_msgs/Float64MultiArray` | 受信 | 排土板の反力、刃先位置、地面の高さなど（50 Hz）。値の名前は `layout.dim[0].label` にカンマ区切りで入る |
@@ -73,6 +32,86 @@ test_episode.py ─┘   （どう実行するか）  ├─ sim_interface.py（
 | `/d37pxi_24/blade_cmd` | `com3_msgs/JointCmd` | 送信 | `lift_joint` への速度指令（`control_type = 1`） |
 | `/sim/episode_cmd` | `std_msgs/String`（JSON） | 送信 | エピソードの設定（土質・地形の加工）、進行状況の更新 |
 | `/clock` | — | 受信 | シミュレーション時刻（ノードは `use_sim_time = True` で動く） |
+
+### 2.2 収集データ
+
+`bull_ope` が出力する時系列データ（`data/test/*.csv`、`data/run_*/ep*.csv`）の各カラムの収集元と内容。1行 = `/d37pxi_24/blade_state` を1回受信した時点（50 Hz）。他のトピックの値は、その時点で受信済みの最新値を使う。
+
+記録するのはエピソードの「排土板を下げる → 走る → 上げる」の間（`phase` が `lowering` / `running` / `raising`）だけで、学習には `phase == "running"` の行を使う。
+
+#### 収集元の凡例
+| 収集元 | 意味 |
+| --- | --- |
+| bull_ope（エピソード） | 実行中のエピソードの情報。`bull_ope` 内で決まる |
+| bull_ope（計算） | `bull_ope`（`recorder.py`）が他の値から計算する |
+| bull_ope（指令） | `bull_ope`（`sim_interface.py`）が最後に送った指令の値 |
+| blade_state / AGX API | 自作の `BladeStatePublisher.cs` が AGX Dynamics の API で取得し、`/d37pxi_24/blade_state` で配信 |
+| blade_state / AGXUnity | 同スクリプトが AGXUnity の Shovel の設定（刃先・上端の位置）から計算して配信 |
+| blade_state / Unity | 同スクリプトが Unity の機能（`Terrain.SampleHeight` など）で取得して配信 |
+| joint_states | OperaSim 本体が `/d37pxi_24/joint_states` で配信 |
+| global_pose | OperaSim 本体が `/d37pxi_24/global_pose` で配信 |
+| episode_status / AGX API | 自作の `SimEpisodeManager.cs` が AGX の地形材料から読み戻し、`/sim/episode_status` で配信。エピソード開始時に1回だけ受け取り、全行に同じ値を書く |
+
+#### 座標系の約束
+- **力・トルク（`F_*`、`T_*`）：** 車体（`base_link`）に固定した座標。x：前方、y：左方、z：上方。
+- **位置（`edge_*`、`x`、`y`、`z`）・高さ（`ground_*`）：** ワールド座標。高さは Unity のワールド y と同じ値。
+
+#### カラム一覧
+| 収集元 | カラム名 | 内容 |
+| --- | --- | --- |
+| bull_ope（エピソード） | `episode_index` | エピソード番号（`test_episode` では常に 0） |
+| bull_ope（エピソード） | `episode_name` | エピソード名（例：`val_constant_depth`） |
+| bull_ope（エピソード） | `seed` | エピソードの乱数のシード |
+| bull_ope（エピソード） | `phase` | 進行状況。`lowering`（排土板を下げる）、`running`（走行）、`raising`（排土板を上げる） |
+| bull_ope（エピソード） | `leg` | エピソードが指定した区間名（`label` の仕組みを使っている場合のみ。例：`forward_1`） |
+| bull_ope（計算） | `t` | 記録開始からの経過時間 [s]（`sim_time` − 最初の `sim_time`） |
+| blade_state / Unity | `sim_time` | シミュレーション時刻 [s]（Unity の `Time.fixedTimeAsDouble`） |
+| blade_state / AGX API | `F_total_x`, `F_total_y`, `F_total_z` | 排土板が土から受ける力の合力 [N]（下の4つの力の和）。土を押して前進中は `F_total_x` が負 |
+| blade_state / AGX API | `F_pen_x`, `F_pen_y`, `F_pen_z` | 貫入抵抗 [N]。刃先が削られていない地面に食い込むときの抵抗（`Terrain.getPenetrationForce`） |
+| blade_state / AGX API | `F_sep_x`, `F_sep_y`, `F_sep_z` | 分離抵抗 [N]。前方へ切削・押土するとき、排土板の前の土塊から受ける力（`Terrain.getSeparationContactForce`）。前進時に支配的 |
+| blade_state / AGX API | `F_def_x`, `F_def_y`, `F_def_z` | 変形抵抗 [N]。後退や横方向など、切削方向以外に土を押しのけるときの力（`Terrain.getDeformationContactForce`）。直進時は 0 |
+| blade_state / AGX API | `F_con_x`, `F_con_y`, `F_con_z` | 通常の接触力 [N]。排土板の面が削られていない地面に押し付けられたときの力（`Terrain.getContactForce`）。通常の前進時は 0 |
+| blade_state / AGX API | `T_pen_x`, `T_pen_y`, `T_pen_z` | 貫入抵抗のトルク [N·m]（参考値） |
+| blade_state / AGXUnity | `edge_x`, `edge_y`, `edge_z` | 刃先（Cutting Edge）の中点の位置 [m]。`edge_z` が刃先の高さ |
+| blade_state / AGXUnity | `blade_width` | 刃先の両端の距離 = 排土板の幅 [m] |
+| blade_state / AGXUnity | `blade_alpha_deg` | 排土板の角度 α [deg]。刃先から上端へのベクトルが、水平（車体の後ろ向き）となす角。90° で垂直 |
+| blade_state / Unity | `ground_below` | 刃先の真下の地面の高さ [m]（削った後の地面） |
+| blade_state / Unity | `ground_ahead` | 刃先から 0.5 m 前方の地面の高さ [m]。開始時の値が `ground_h0` になる |
+| blade_state / Unity | `ground_profile_025cm` 〜 `ground_profile_200cm` | 刃先から前方 25 cm、50 cm、…、200 cm（25 cm ごとに 8 点）の地面の高さ [m] |
+| blade_state / AGX API | `front_soil_mass` | 排土板の前の土塊の質量 [kg]。`AGX_EXTRA_TERRAIN_API` 有効時のみ（無効時は NaN） |
+| blade_state / AGX API | `excavated_volume_step` | そのステップで掘り起こされた体積 [m³]。`AGX_EXTRA_TERRAIN_API` 有効時のみ（無効時は NaN） |
+| blade_state / AGX API | `state_compaction_mean` | 刃先から前方 1 m・排土板の幅の範囲の、地表の締固めの程度の平均 [-]。`AGX_GRID_CONTROL` 有効時のみ（無効時は NaN） |
+| blade_state / AGX API | `state_compaction_std` | 同じ範囲の締固めの程度の標準偏差 [-]（同上） |
+| blade_state / AGX API | `state_compaction_n` | 平均に使った地形のマスの数（無効時は 0） |
+| joint_states | `lift_joint_pos`, `lift_joint_vel`, `lift_joint_effort` | 排土板の上げ下げの関節の位置・速度・力。`effort` は排土板を支える力で、反力の上下成分と排土板・腕の重さを含む（実機のリフトシリンダ圧に相当） |
+| joint_states | `tilt_joint_pos`, `tilt_joint_vel`, `tilt_joint_effort` | 排土板のチルト（前後の傾き）の関節の位置・速度・力 |
+| joint_states | `angle_joint_pos`, `angle_joint_vel`, `angle_joint_effort` | 排土板のアングル（左右の振り）の関節の位置・速度・力。直進時は動かさない |
+| joint_states | `right_track_pos`, `right_track_vel`, `right_track_effort` | 右履帯の回転位置・回転速度・駆動力（実機の走行モータのトルクに相当） |
+| joint_states | `left_track_pos`, `left_track_vel`, `left_track_effort` | 左履帯の回転位置・回転速度・駆動力 |
+| global_pose | `x`, `y`, `z` | 車体の位置 [m] |
+| global_pose | `roll`, `pitch`, `yaw` | 車体の姿勢 [rad]。トピックのクォータニオンを `bull_ope` で変換。`pitch` は前後の傾き、`yaw` は向き |
+| global_pose | `vx`, `vy`, `vz` | 車体の速度 [m/s] |
+| global_pose | `wz` | 車体の旋回の角速度 [rad/s] |
+| bull_ope（指令） | `cmd_vx` | 送った前進速度の指令 [m/s]（`/d37pxi_24/cmd_vel` の `linear.x`） |
+| bull_ope（指令） | `cmd_wz` | 送った旋回の角速度の指令 [rad/s]（角速度の指令を追加している場合のみ） |
+| bull_ope（指令） | `cmd_lift` | 送った `lift_joint` の速度指令（`/d37pxi_24/blade_cmd` の `velocity[0]`） |
+| bull_ope（計算） | `ground_h0` | エピソード開始時に 0.5 秒間測った `ground_ahead` の中央値 [m]。切削深さの基準 |
+| bull_ope（計算） | `depth` | 切削深さ [m] = `ground_h0` − `edge_z`。正で元の地面より下。平らな地形が前提 |
+| bull_ope（計算） | `speed` | 水平面内の速さ [m/s] = √(`vx`² + `vy`²)。後退中も正 |
+| bull_ope（計算） | `distance` | 開始位置からの水平の直線距離 [m] |
+| bull_ope（計算） | `cut_volume` | 累積切削体積 [m³]。`blade_width` × `depth` × `speed` × Δt を、走行中かつ `depth` > 0 の間だけ積算。前方土量の推定値 |
+| bull_ope（計算） | `slip_ratio` | 履帯のスリップ率 [-] = 1 − `speed` ÷（左右の履帯の回転速度の平均 × 起動輪の半径）。`config.py` の `SPROCKET_RADIUS` を設定したときのみ（未設定時は NaN） |
+| episode_status / AGX API | `label_c` | 粘着力 c [Pa]（推定の正解） |
+| episode_status / AGX API | `label_phi` | 内部摩擦角 φ [deg]（推定の正解） |
+| episode_status / AGX API | `label_rho0` | 地山の密度 ρ0 [kg/m³]（推定の正解） |
+| episode_status / AGX API | `label_swell` | 膨張率 [-] |
+| episode_status / AGX API | `label_E0` | ヤング率 [Pa] |
+
+#### 注意点
+- 同じ行の値でも、トピックごとに受信の時刻が異なるため、厳密には同時刻の値ではない（数十ミリ秒以内のずれ）。
+- 関節の位置・速度・力の単位は、関節が回転か直動かで決まる（rad / rad/s / N·m、または m / m/s / N）。Unity のモデルで要確認。
+- 排土板の前でこぼれた土の粒子からの力は、AGX の仕様上 `F_*` に含まれない（AGX マニュアル 23.19）。
+- `leg` と `cmd_wz` は、それぞれの仕組みを追加した場合にのみ存在する。
 
 
 ## 3. 1エピソードの流れ
