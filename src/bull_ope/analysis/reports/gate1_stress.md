@@ -34,7 +34,6 @@
 - stress_depth_limits：目標深さの制限 546 行（0.5 m → 0.20 m の区間と、−1.0 m → −0.5 m の区間の両方）
 - ラベル：stress_heavy_push の NG は点検の既定値（検証用の土質）と比べたため。
   土質を指定し直すと OK（c = 30000、φ = 45、ρ = 1950）
-- 力の向き・速度：check_force_sign.py ○○、check_velocity.py ○○
 - WARN（合計 14 件）はすべて説明できる
   - 一定の列：F_def・F_con が常に 0（関門3 で確認する）。ground_profile の遠い位置と ground_ahead は、
     手を付けていない平らな地面を見ているため一定。cmd_vx・cmd_wz はエピソードの設計どおり一定。
