@@ -17,6 +17,10 @@
 | stress_heavy_push | `SafetyStop: 排土板が深く入り込んだ` | 機体が止まり終了 | なし | |
 | stress_nan_depth | 約2秒で `InvalidCommand: … depth が不正な値です: nan` | 排土板が急に動かず、機体が止まる | なし | |
 
+「Console の新しいエラー：なし」は、読み込み直しの直後に毎回出る既知のメッセージ
+（`Constraint.Initialize`、`UrdfInertial` / `UrdfJointRevolute`、`Removed 2 disabled shovels`、
+`HUDPanel`、`RealTimeTracker`、`Critical Timing Problem`）以外に出ていないことを指す。
+`Some objects were not cleaned up` は8回とも出ていない。読み込み直しの時間は 1.09〜1.34 秒。
 
 ## 段階B：混在の連続実行
 - 点検結果：`check_stress_mix.md`
