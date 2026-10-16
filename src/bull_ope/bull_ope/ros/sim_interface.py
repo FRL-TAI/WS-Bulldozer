@@ -123,12 +123,17 @@ class SimInterface(Node):
             time.sleep(0.005)
 
     def wait_ready(self, timeout=30.0):
-        """blade_state / joint_states / global_pose / episode_status が届くまで待つ"""
+        """blade_state / joint_states / global_pose / episode_status が届き、
+        /sim/episode_cmd の送信が Unity 側とつながるまで待つ"""
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             missing = [n for n, v in [("blade_state", self.blade), ("joint_states", self.joints),
                                       ("global_pose", self.pose), ("episode_status", self.status)]
                        if v is None]
+            # 送信者が相手とつながる前に送ったメッセージは捨てられる（新しいプロセスの最初の reload が届かない）。
+            # Unity 側（ROS-TCP-Endpoint）が /sim/episode_cmd を購読していることを確かめてから進む
+            if self.pub_episode.get_subscription_count() == 0:
+                missing.append("episode_cmd の購読（Unity 側）")
             if not missing:
                 return
             self.get_logger().info(f"受信待ち: {', '.join(missing)}", throttle_duration_sec=2.0)
