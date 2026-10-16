@@ -1,22 +1,22 @@
 # 関門1：スクリプトの不具合探し
 
-- 実行日：
-- Unity 側のコミット：
-- bull_ope 側のコミット：
+- 実行日：2026/10/16
+- Unity 側のコミット：d2ec69c7d4a2fe2989b77450bf59416611c90aa7
+- bull_ope 側のコミット：7d8a346fae8d0fb76ca4ba45d69590a636ee8bee
 - 結果のフォルダ：`data/validation/stress/<実行日時>/`
 
 ## 段階A：1つずつ実行（目で確認）
 
 | エピソード | ターミナルの結果 | 機体の動き（Unity の画面） | Unity の Console の新しいエラー | 判定 |
 | --- | --- | --- | --- | --- |
-| stress_instant_done | | | | |
-| stress_error_midrun | | | | |
-| stress_none_command | | | | |
-| stress_runaway | | | | |
-| stress_depth_limits | | | | |
-| stress_spin | | | | |
-| stress_heavy_push | | | | |
-| stress_nan_depth | | | | |
+| stress_instant_done | | 走行を始めた瞬間に終わる | なし | |
+| stress_error_midrun | | 3 秒走った後、エピソードのコードでエラー | なし | |
+| stress_none_command | | 2 秒走った後、機体が止まる| なし | |
+| stress_runaway | | フィールドの端より手前で止まった| なし | |
+| stress_depth_limits | | 機体が転倒したり、しなかったりする | なし | |
+| stress_spin | | 予想通り、地面を引きずりながら旋回していた| なし | |
+| stress_heavy_push | | 進めなくなり、40 秒の時間切れで終了 | なし | |
+| stress_nan_depth | | 2秒後もブレードはそのままの位置を保ったまま進む | なし | |
 
 ## 段階B：混在の連続実行
 
