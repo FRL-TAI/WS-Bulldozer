@@ -10,7 +10,7 @@
 # 段階:
 #   A  : stress_* を1つずつ test_episode で実行（Unity の画面を見ながら確かめる）
 #   B  : 失敗するエピソードと普通のエピソードを混ぜて collect_data で連続実行
-#   B2 : stress_numpy_params を collect_data で実行（記録の JSON 変換の不具合の確認。止まるのが想定）
+#   B2 : stress_numpy_params を collect_data で実行（記録の JSON 変換の不具合の確認。修正後は正常に終わるのが想定）
 #   C  : 土質を極端な範囲で変えて連続実行（ラベルの入れ替わりの確認）
 #   D  : 2 秒のエピソードを 50 回（シーンの読み込み直しの耐久試験）
 #

@@ -136,7 +136,7 @@ def main():
                     "file": row.get("file"),
                     "status": f"record_error: {e}",
                 }, ensure_ascii=False)
-            with open(jsonl_path, "a") as f:   # 途中で止まっても残るよう1件ずつ追記
+            with open(jsonl_path, "a", encoding="utf-8") as f:   # 途中で止まっても残るよう1件ずつ追記
                 f.write(line + "\n")
             elapsed = time.monotonic() - t_start
             log.info(f"経過 {elapsed / 60:.1f} 分、残り約 {elapsed / (i + 1) * (len(plan) - i - 1) / 60:.1f} 分")
