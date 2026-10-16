@@ -9,15 +9,22 @@ from .episode import Command, Episode, Observation, SoilParams, TerrainOp
 __all__ = ["Episode", "SoilParams", "TerrainOp", "Observation", "Command", "available_episodes"]
 
 
-def available_episodes():
-    """{エピソード名: クラス} を返す"""
+def episode_group(cls):
+    """エピソードのグループ（dataset / sandbox / validation）をモジュールの場所から求める"""
+    root = __name__ + "."                                # "bull_ope.episodes."
+    return cls.__module__[len(root):].split(".")[0]      # "dataset"、"sandbox"、"validation"
+
+
+def available_episodes(group=None):
+    """{エピソード名: クラス} を返す。group を指定すると、そのフォルダのものだけ"""
     found = {}
-    # __path__ と __name__ はこのパッケージ（episodes）自身のもの。サブフォルダも含めてすべて探す
     for info in pkgutil.walk_packages(__path__, prefix=__name__ + "."):
         module = importlib.import_module(info.name)
         for _, cls in inspect.getmembers(module, inspect.isclass):
             if (issubclass(cls, Episode) and cls.name and not inspect.isabstract(cls)
-                    and cls.__module__ == module.__name__):   # import しただけのクラスは数えない
+                    and cls.__module__ == module.__name__):
+                if group is not None and episode_group(cls) != group:
+                    continue
                 if cls.name in found and found[cls.name] is not cls:
                     raise ValueError(f"エピソード名が重複しています: {cls.name}")
                 found[cls.name] = cls

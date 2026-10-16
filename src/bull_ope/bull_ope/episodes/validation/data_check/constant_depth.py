@@ -1,5 +1,5 @@
-from ..episode import Command
-from .base import ValidationEpisode
+from ...episode import Command
+from ..base import ValidationEpisode
 
 
 class ValidationConstantDepth(ValidationEpisode):
