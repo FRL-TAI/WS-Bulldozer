@@ -66,7 +66,7 @@ class EpisodeRunner:
         return Observation(
             t=self.iface.now() - t0,
             distance=math.hypot(p["x"] - x0, p["y"] - y0),
-            speed=math.hypot(p["vx"], p["vy"]),
+            speed=p["v_forward"],          # 前進方向の速度（前進で正、後退で負）
             edge_z=b["edge_z"], ground_h0=h0, depth=h0 - b["edge_z"], blade=dict(b))
 
     @staticmethod

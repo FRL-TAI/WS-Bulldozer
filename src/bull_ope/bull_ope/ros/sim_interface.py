@@ -5,6 +5,7 @@
 import json
 import math
 import time
+from collections import deque
 
 from com3_msgs.msg import JointCmd
 from geometry_msgs.msg import Twist
@@ -37,6 +38,7 @@ class SimInterface(Node):
         self.cmd_lift = 0.0
         
         self.blade_listeners = []   # blade_state を受信するたびに呼ぶ関数（記録用）
+        self._pose_hist = deque(maxlen=200)   # 速度の計算用の (時刻, x, y, z, yaw) の履歴
         self._request_id = int(time.time()) % 100000
 
         self.create_subscription(Float64MultiArray, C.TOPIC_BLADE_STATE, self._on_blade, 50)
@@ -71,10 +73,37 @@ class SimInterface(Node):
         self.joints = d
 
     def _on_pose(self, msg):
-        p, q, v = msg.pose.pose.position, msg.pose.pose.orientation, msg.twist.twist
+        """global_pose を受信する。
+
+        OperaSim の global_pose は速度の欄（twist）が 0 のままなので（関門1の段階Aで確認）、
+        位置と向きの変化から速度を計算する。VEL_WINDOW 秒ほど前の値との差をとって、ノイズを抑える。
+        """
+        p, q = msg.pose.pose.position, msg.pose.pose.orientation
         roll, pitch, yaw = quat_to_rpy(q)
+        t = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
+
+        h = self._pose_hist
+        if h and t < h[-1][0]:
+            h.clear()                       # 時刻が戻った（シーンの読み込み直し）→ 履歴を捨てる
+        if not h or t > h[-1][0]:
+            h.append((t, p.x, p.y, p.z, yaw))
+
+        # VEL_WINDOW 秒以上前の、いちばん新しい値を探す
+        old = next((s for s in reversed(h) if t - s[0] >= C.VEL_WINDOW), None)
+        vx = vy = vz = wz = 0.0
+        if old is not None:
+            dt = t - old[0]
+            vx, vy, vz = (p.x - old[1]) / dt, (p.y - old[2]) / dt, (p.z - old[3]) / dt
+            wz = math.atan2(math.sin(yaw - old[4]), math.cos(yaw - old[4])) / dt   # 角度の折り返しを考慮
+
+        # 車体の前方向・左方向の成分（前進で正、後退で負）
+        c, s = math.cos(yaw), math.sin(yaw)
+        v_forward = vx * c + vy * s
+        v_lateral = -vx * s + vy * c
+
         self.pose = dict(x=p.x, y=p.y, z=p.z, roll=roll, pitch=pitch, yaw=yaw,
-                         vx=v.linear.x, vy=v.linear.y, vz=v.linear.z, wz=v.angular.z)
+                         vx=vx, vy=vy, vz=vz, wz=wz, v_forward=v_forward, v_lateral=v_lateral,
+                         pose_stamp=t)
 
     def _on_status(self, msg):
         try:
@@ -188,6 +217,7 @@ class SimInterface(Node):
 
         # 古いシーンの値を捨て、新しいシーンの値がそろうまで待つ
         self.blade = self.joints = self.pose = None
+        self._pose_hist.clear()
         self.cmd_vx = self.cmd_wz = self.cmd_lift = 0.0
         self.wait_ready(timeout=max(1.0, deadline - time.monotonic()))
 

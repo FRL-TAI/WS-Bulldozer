@@ -59,11 +59,13 @@ class Recorder:
             # ----- 派生量 -----
             edge_z = blade.get("edge_z", float("nan"))
             depth = self.ground_h0 - edge_z
-            speed = math.hypot(pose.get("vx", 0.0), pose.get("vy", 0.0))
+            speed = math.hypot(pose.get("vx", 0.0), pose.get("vy", 0.0))   # 速さ（向きなし）
+            v_forward = pose.get("v_forward", 0.0)                         # 前進で正、後退で負
             distance = math.hypot(pose.get("x", self.x0) - self.x0, pose.get("y", self.y0) - self.y0)
             width = blade.get("blade_width", float("nan"))
             if self.phase == "running" and depth > 0 and math.isfinite(width):
-                self.cut_volume += width * depth * speed * dt
+                # 前進しているときだけ積算する（後退中の切削を数えない）
+                self.cut_volume += width * depth * max(v_forward, 0.0) * dt
             slip = float("nan")
             if C.SPROCKET_RADIUS:
                 w = [abs(joints.get(f"{j}_vel", 0.0)) for j in C.TRACK_JOINTS]
