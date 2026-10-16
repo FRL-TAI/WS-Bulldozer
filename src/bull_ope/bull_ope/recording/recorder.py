@@ -17,6 +17,8 @@ class Recorder:
         self.lock = threading.Lock()
         self.active = False
         self.phase = ""
+        self.target_depth = float("nan")   # runner が設定する、制限後の目標深さ [m]（排土板を上げるときは −RAISE_HEIGHT）
+        self.depth_clipped = False         # 目標深さを制限したか
         iface.blade_listeners.append(self._on_blade)
 
     def start(self, path, ground_h0, origin_xy, labels, meta):
@@ -76,6 +78,8 @@ class Recorder:
             row = {}
             row.update(self.meta)
             row["phase"] = self.phase
+            row["target_depth"] = self.target_depth
+            row["depth_clipped"] = int(self.depth_clipped)
             row["t"] = sim_time - self.t0
             row.update(blade)
             row.update(joints)

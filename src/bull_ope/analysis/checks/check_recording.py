@@ -29,7 +29,7 @@ EXPECTED_NAN = {"front_soil_mass", "excavated_volume_step",
 # エピソード中に一定で正常な列
 EXPECTED_CONST_PREFIX = ("label_",)
 EXPECTED_CONST = {"episode_index", "episode_name", "seed", "phase", "leg", "ground_h0",
-                  "blade_width", "state_compaction_n"}
+                  "blade_width", "state_compaction_n", "target_depth", "depth_clipped"}
 
 # 走行時間の目安 [s] ( ここにないエピソードは判定しない ) 
 EXPECTED_RUN_TIME = {

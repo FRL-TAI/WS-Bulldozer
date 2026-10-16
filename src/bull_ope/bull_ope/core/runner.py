@@ -31,6 +31,10 @@ class InvalidCommand(RuntimeError):
     """エピソードが不正な指令（Command 以外、NaN・無限大など）を返した"""
 
 
+class SafetyStop(RuntimeError):
+    """機体が危険な状態になった（開始位置から離れすぎ・大きく傾いた・深く入り込みすぎた）ため止めた"""
+
+
 class EpisodeRunner:
     def __init__(self, iface):
         self.iface = iface
@@ -61,12 +65,39 @@ class EpisodeRunner:
             raise InvalidCommand(f"{where} の depth が不正な値です: {cmd.depth!r}（排土板を上げるなら None）")
         return cmd
 
-    def _sleep(self, x0, y0):
-        """制御周期だけ待つ。そのたびに、開始位置から離れすぎていないかを確認する"""
-        r = math.hypot(self.iface.pose["x"] - x0, self.iface.pose["y"] - y0)
+    def _clip_depth(self, depth):
+        """目標深さを [DEPTH_MIN, DEPTH_MAX] に収める。None（排土板を上げる）はそのまま"""
+        if depth is None:
+            return None, False
+        clipped = min(max(depth, C.DEPTH_MIN), C.DEPTH_MAX)
+        return clipped, clipped != depth
+
+    def _check_safety(self, stop_on_depth=True):
+        """機体が危険な状態でないかを確かめる。危険なら機体を止めて SafetyStop を送出する。
+        stop_on_depth=False のとき（排土板を上げる区間）は、深さの超過では止めずに最大値を記録する"""
+        p, s = self.iface.pose, self._safety_ref
+        reasons = []
+        r = math.hypot(p["x"] - s["x"], p["y"] - s["y"])
         if C.SAFE_RADIUS is not None and r > C.SAFE_RADIUS:
+            reasons.append(f"開始位置から {r:.1f} m 離れた（SAFE_RADIUS = {C.SAFE_RADIUS} m）")
+        dpitch = math.degrees(abs(p["pitch"] - s["pitch"]))
+        droll = math.degrees(abs(p["roll"] - s["roll"]))
+        if C.MAX_TILT_DEG is not None and max(dpitch, droll) > C.MAX_TILT_DEG:
+            reasons.append(f"機体が傾いた（ピッチ {dpitch:.1f}°、ロール {droll:.1f}°、上限 {C.MAX_TILT_DEG}°）")
+        depth = s["h0"] - self.iface.blade["edge_z"]
+        if C.MAX_ACTUAL_DEPTH is not None and depth > C.MAX_ACTUAL_DEPTH:
+            if stop_on_depth:
+                reasons.append(f"排土板が深く入り込んだ（{depth * 100:.1f} cm、上限 {C.MAX_ACTUAL_DEPTH * 100:.0f} cm）")
+            else:
+                prev = self._depth_over_max
+                self._depth_over_max = depth if prev is None else max(prev, depth)
+        if reasons:
             self.iface.stop_all()
-            raise RuntimeError(f"開始位置から {r:.1f} m 離れたため停止しました（SAFE_RADIUS = {C.SAFE_RADIUS} m）")
+            raise SafetyStop("安全のため停止しました：" + "、".join(reasons))
+
+    def _sleep(self, stop_on_depth=True):
+        """制御周期だけ待つ。そのたびに、機体が危険な状態でないかを確かめる"""
+        self._check_safety(stop_on_depth)
         self.iface.sleep_sim(C.CONTROL_PERIOD)
 
     def _measure_ground(self, duration=0.5):
@@ -125,6 +156,10 @@ class EpisodeRunner:
         # 2. 基準の地面高さと開始位置
         h0 = self._measure_ground()
         x0, y0 = iface.pose["x"], iface.pose["y"]
+        # 安全確認の基準（開始時の位置・傾き・地面の高さ）
+        self._safety_ref = {"x": x0, "y": y0, "h0": h0,
+                            "pitch": iface.pose["pitch"], "roll": iface.pose["roll"]}
+        self._depth_over_max = None   # 上げる区間で深さの上限を超えた場合の最大値 [m]
         labels = {
             "label_c": st.get("cohesion"),
             "label_phi": st.get("friction_angle_deg"),
@@ -147,11 +182,14 @@ class EpisodeRunner:
             self._phase("lowering")
             t0 = iface.now()
             first = self._validate_command(episode.operation(self._observe(t0, h0, x0, y0)), episode, 0.0)
-            d0 = first.depth if first.depth is not None else -C.RAISE_HEIGHT
+            d0, clipped = self._clip_depth(first.depth)
+            if d0 is None:
+                d0 = -C.RAISE_HEIGHT
+            self.recorder.target_depth, self.recorder.depth_clipped = d0, clipped
             while iface.now() - t0 < C.LOWER_TIMEOUT:
                 if abs(self._lift_control(h0 - d0)) < C.LOWER_TOLERANCE:
                     break
-                self._sleep(x0, y0)
+                self._sleep()
 
             # 5. 走行
             self._phase("running")
@@ -162,22 +200,28 @@ class EpisodeRunner:
                     break
                 cmd = self._validate_command(episode.operation(obs), episode, obs.t)
                 iface.send_vel(cmd.speed, cmd.yaw_rate)
-                target = h0 - cmd.depth if cmd.depth is not None else h0 + C.RAISE_HEIGHT
+                depth, clipped = self._clip_depth(cmd.depth)
+                if depth is None:
+                    depth = -C.RAISE_HEIGHT          # 排土板を上げる = 地面から RAISE_HEIGHT 上
+                self.recorder.target_depth, self.recorder.depth_clipped = depth, clipped
+                target = h0 - depth
                 err = self._lift_control(target)
                 if on_tick:
                     on_tick(obs, cmd, err)
-                self._sleep(x0, y0)
+                self._sleep()
             summary["run_time"] = obs.t
             summary["run_distance"] = obs.distance
 
             # 6. 停止して排土板を上げる
             self._phase("raising")
+            self.recorder.target_depth, self.recorder.depth_clipped = -C.RAISE_HEIGHT, False
             iface.send_vel(0.0)
             t0 = iface.now()
             while iface.now() - t0 < C.RAISE_TIME:
                 self._lift_control(h0 + C.RAISE_HEIGHT)
-                self._sleep(x0, y0)
+                self._sleep(stop_on_depth=False)   # 深く入っていても上げ続けるほうが安全
             iface.stop_all()
+            summary["raise_depth_over_max"] = self._depth_over_max
         finally:
             # 7. 記録終了（エラーや Ctrl+C で止まった場合も必ず実行する）
             summary.update(self.recorder.stop())
