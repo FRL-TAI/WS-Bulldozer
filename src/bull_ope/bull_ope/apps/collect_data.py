@@ -28,6 +28,7 @@ from rclpy.executors import MultiThreadedExecutor
 from .. import config as C
 from ..core.runner import EpisodeRunner, SkipEpisode
 from ..episodes import SoilParams, available_episodes
+from ..recording.json_utils import to_jsonable
 
 
 def lhs_soils(cls, n, rng):
@@ -124,8 +125,19 @@ def main():
                 row.update(status=f"error: {e}")
                 iface.stop_all()
             records.append(row)
+            try:
+                line = json.dumps(to_jsonable(row), ensure_ascii=False, allow_nan=False)
+            except (TypeError, ValueError) as e:
+                # 変換しきれなかった場合も、収集全体は止めずに最低限の情報だけ残す
+                log.error(f"episodes.jsonl への記録に失敗: {e}")
+                line = json.dumps({
+                    "episode_index": row.get("episode_index"),
+                    "episode_name": row.get("episode_name"),
+                    "file": row.get("file"),
+                    "status": f"record_error: {e}",
+                }, ensure_ascii=False)
             with open(jsonl_path, "a") as f:   # 途中で止まっても残るよう1件ずつ追記
-                f.write(json.dumps(row, ensure_ascii=False) + "\n")
+                f.write(line + "\n")
             elapsed = time.monotonic() - t_start
             log.info(f"経過 {elapsed / 60:.1f} 分、残り約 {elapsed / (i + 1) * (len(plan) - i - 1) / 60:.1f} 分")
     finally:
