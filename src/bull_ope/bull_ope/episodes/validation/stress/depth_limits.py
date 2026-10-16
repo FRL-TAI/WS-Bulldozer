@@ -1,8 +1,8 @@
 from ...episode import Command
-from ..base import StressEpisode
+from ..base import ValidationEpisode
 
 
-class StressDepthLimits(StressEpisode):
+class StressDepthLimits(ValidationEpisode):
     """OperaSim の排土板の高さの制限（地面から −0.38〜+0.8 m）を超える目標を与える。
 
     2 m ごとに、深すぎる（0.5 m）→ 普通（0.05 m）→ 高すぎる（−1.0 m = 地面から 1 m 上）→ 普通 と変える。

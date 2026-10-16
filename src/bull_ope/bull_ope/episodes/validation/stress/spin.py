@@ -1,8 +1,8 @@
 from ...episode import Command
-from ..base import StressEpisode
+from ..base import ValidationEpisode
 
 
-class StressSpin(StressEpisode):
+class StressSpin(ValidationEpisode):
     """排土板を下ろしたまま、その場で旋回し続ける。
 
     確かめること：機体が転倒・跳ねたりしないか、旋回中の反力（横方向）や姿勢の値が極端にならないか

@@ -1,8 +1,8 @@
 from ...episode import Command
-from ..base import StressEpisode
+from ..base import ValidationEpisode
 
 
-class StressRunaway(StressEpisode):
+class StressRunaway(ValidationEpisode):
     """排土板を上げて、止まらずに 100 m 走ろうとする（フィールドの外へ向かう）。
 
     確かめること：SAFE_RADIUS を超えたところで止まり、エラーとして記録されるか。

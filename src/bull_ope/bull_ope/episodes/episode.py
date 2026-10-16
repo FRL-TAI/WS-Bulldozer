@@ -6,8 +6,6 @@
   - soil            : 土質パラメータ(SoilParams)
   - terrain_ops()   : 地形データ（リセット後の地形に加える加工。既定は平らな地形のまま）
   - operation(obs)  : 操作（各時刻の観測から、車速と目標切削深さを返す）
-
-新しいエピソードを作るときは specific/ に Episode を継承したクラスを書くだけでよい
 """
 from __future__ import annotations
 

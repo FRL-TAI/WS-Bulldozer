@@ -1,8 +1,8 @@
 from ...episode import Command
-from ..base import StressEpisode
+from ..base import ValidationEpisode
 
 
-class StressNumpyParams(StressEpisode):
+class StressNumpyParams(ValidationEpisode):
     """操作のパラメータに NumPy の型（int64、配列）をそのまま入れる。
 
     確かめること：collect_data が episodes.jsonl に書き込むとき（json.dumps）にエラーで止まらないか

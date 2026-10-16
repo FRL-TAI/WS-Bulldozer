@@ -1,8 +1,8 @@
 from ...episode import Command
-from ..base import StressEpisode
+from ..base import ValidationEpisode
 
 
-class StressHeavyPush(StressEpisode):
+class StressHeavyPush(ValidationEpisode):
     """硬く重い土（粘着力・密度を大きく）を深く削る。前に進めなくなる・粒子が大量に出る状況。
 
     確かめること：進めなくても TIMEOUT で終わるか、粒子が多くても次の読み込み直しが正常か、

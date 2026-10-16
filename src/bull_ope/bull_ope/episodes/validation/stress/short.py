@@ -1,8 +1,8 @@
 from ...episode import Command
-from ..base import StressEpisode
+from ..base import ValidationEpisode
 
 
-class StressShort(StressEpisode):
+class StressShort(ValidationEpisode):
     """2 秒だけ走る。シーンの読み込み直しを短い間隔で何度も繰り返すための試験。
 
     確かめること：読み込み直しを何十回も続けても、かかる時間・メモリ・シミュレーションの速さが変わらないか

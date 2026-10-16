@@ -1,10 +1,10 @@
 import math
 
 from ...episode import Command
-from ..base import StressEpisode
+from ..base import ValidationEpisode
 
 
-class StressNanDepth(StressEpisode):
+class StressNanDepth(ValidationEpisode):
     """走行の途中から、目標深さに NaN を返す（反力が取れないときに計算が NaN になる状況を模擬）。
 
     確かめること：NaN の指令が OperaSim に送られてしまわないか。送られた場合、排土板がどう動くか
@@ -19,7 +19,7 @@ class StressNanDepth(StressEpisode):
         return obs.t >= 6.0
 
 
-class StressNoneCommand(StressEpisode):
+class StressNoneCommand(ValidationEpisode):
     """走行の途中から、Command ではなく None を返す（条件分岐の書き忘れを模擬）。
 
     確かめること：エラーとして記録され、機体が止まるか

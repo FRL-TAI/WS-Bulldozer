@@ -1,8 +1,8 @@
 from ...episode import Command
-from ..base import StressEpisode
+from ..base import ValidationEpisode
 
 
-class StressErrorMidrun(StressEpisode):
+class StressErrorMidrun(ValidationEpisode):
     """走行の途中（3 秒後）で、エピソードのコードがエラーを起こす。
 
     確かめること：機体が止まり、CSV が閉じられ、エラーとして記録されるか。

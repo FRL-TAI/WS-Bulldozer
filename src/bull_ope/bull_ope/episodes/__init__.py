@@ -1,9 +1,8 @@
-"""エピソードの一覧。specific/ 以下の Episode のサブクラスを自動で集める。"""
+"""エピソードの一覧。episodes/ 以下の Episode のサブクラスを自動で集める。"""
 import importlib
 import inspect
 import pkgutil
 
-from . import specific
 from .episode import Command, Episode, Observation, SoilParams, TerrainOp
 
 __all__ = ["Episode", "SoilParams", "TerrainOp", "Observation", "Command", "available_episodes"]
