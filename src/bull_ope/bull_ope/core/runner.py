@@ -14,16 +14,21 @@
 開始位置への後退は行わない（次のエピソードの最初にシーンを読み込み直すため）。
 """
 import math
+import numbers
 
 import numpy as np
 
 from .. import config as C
-from ..episodes import Observation
+from ..episodes import Command, Observation
 from ..recording.recorder import Recorder
 
 
 class SkipEpisode(Exception):
     """実行条件を満たさないため飛ばすエピソード"""
+
+
+class InvalidCommand(RuntimeError):
+    """エピソードが不正な指令（Command 以外、NaN・無限大など）を返した"""
 
 
 class EpisodeRunner:
@@ -41,6 +46,20 @@ class EpisodeRunner:
         u = float(np.clip(C.LIFT_KP * err, -C.LIFT_VMAX, C.LIFT_VMAX))
         self.iface.send_lift_velocity(C.LIFT_SIGN * u)
         return err
+
+    @staticmethod
+    def _validate_command(cmd, episode, t):
+        """エピソードが返した指令を確かめる。不正なら InvalidCommand（機体を止めてから runner が送出する）"""
+        where = f"{episode.name} の operation()（t = {t:.2f} s）"
+        if not isinstance(cmd, Command):
+            raise InvalidCommand(f"{where} が Command ではなく {type(cmd).__name__} を返しました")
+        for field in ("speed", "yaw_rate"):
+            v = getattr(cmd, field)
+            if not isinstance(v, numbers.Real) or not math.isfinite(v):
+                raise InvalidCommand(f"{where} の {field} が不正な値です: {v!r}")
+        if cmd.depth is not None and (not isinstance(cmd.depth, numbers.Real) or not math.isfinite(cmd.depth)):
+            raise InvalidCommand(f"{where} の depth が不正な値です: {cmd.depth!r}（排土板を上げるなら None）")
+        return cmd
 
     def _sleep(self, x0, y0):
         """制御周期だけ待つ。そのたびに、開始位置から離れすぎていないかを確認する"""
@@ -127,7 +146,7 @@ class EpisodeRunner:
             # 4. 停止したまま排土板を初期深さまで下げる
             self._phase("lowering")
             t0 = iface.now()
-            first = episode.operation(self._observe(t0, h0, x0, y0))
+            first = self._validate_command(episode.operation(self._observe(t0, h0, x0, y0)), episode, 0.0)
             d0 = first.depth if first.depth is not None else -C.RAISE_HEIGHT
             while iface.now() - t0 < C.LOWER_TIMEOUT:
                 if abs(self._lift_control(h0 - d0)) < C.LOWER_TOLERANCE:
@@ -141,7 +160,7 @@ class EpisodeRunner:
                 obs = self._observe(t0, h0, x0, y0)
                 if episode.is_done(obs):
                     break
-                cmd = episode.operation(obs)
+                cmd = self._validate_command(episode.operation(obs), episode, obs.t)
                 iface.send_vel(cmd.speed, cmd.yaw_rate)
                 target = h0 - cmd.depth if cmd.depth is not None else h0 + C.RAISE_HEIGHT
                 err = self._lift_control(target)

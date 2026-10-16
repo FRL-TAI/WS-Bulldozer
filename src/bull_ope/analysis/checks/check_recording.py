@@ -34,7 +34,7 @@ EXPECTED_CONST = {"episode_index", "episode_name", "seed", "phase", "leg", "grou
 # 走行時間の目安 [s] ( ここにないエピソードは判定しない ) 
 EXPECTED_RUN_TIME = {
     "val_static": 10.0, "val_air_run": 20.0, "val_constant_depth": 20.0, "val_depth_step": 18.0,
-    "stress_short": 2.0, "stress_spin": 15.0, "stress_nan_depth": 6.0,
+    "stress_short": 2.0, "stress_spin": 15.0, "stress_nan_depth": 2.0,
 }
 
 PHASE_ORDER = ["lowering", "running", "raising"]

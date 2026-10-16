@@ -22,6 +22,7 @@ EXPECTED_STATUS = {
     "stress_error_midrun": "error",    # エピソードのコードで例外
     "stress_none_command": "error",    # operation() が None を返す
     "stress_runaway": "error",         # SAFE_RADIUS で停止
+    "stress_nan_depth": "error",       # NaN の指令は送らずにエラーで止まる
 }
 
 # NaN があってはいけない列（指令の NaN は、NaN が OperaSim に送られたことを意味する）

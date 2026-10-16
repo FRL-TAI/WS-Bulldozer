@@ -137,7 +137,15 @@ class SimInterface(Node):
 
 
     # ----- 送信 -----
+    @staticmethod
+    def _check_finite(name, *values):
+        """NaN・無限大の指令を OperaSim に送らない（送る前に例外にする）"""
+        for v in values:
+            if not math.isfinite(v):
+                raise ValueError(f"{name} に有限でない値を送ろうとしました: {values}")
+
     def send_vel(self, v, w=0.0):
+        self._check_finite("cmd_vel", float(v), float(w))
         self.cmd_vx = float(v)
         self.cmd_wz = float(w)
         msg = Twist()
@@ -151,6 +159,7 @@ class SimInterface(Node):
         OperaSim の BulldozerInput.SetCommands() は joint_name を見ず、
         配列の [0]=lift, [1]=tilt, [2]=angle の順番で値を読むため、必ず3要素で送る。
         """
+        self._check_finite("blade_cmd", float(u))
         self.cmd_lift = float(u)
         msg = JointCmd()
         msg.joint_name = ["lift_joint", "tilt_joint", "angle_joint"]   # 参考情報（OperaSim 側では未使用）
