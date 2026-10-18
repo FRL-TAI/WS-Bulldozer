@@ -1,7 +1,7 @@
 # 関門5：物理的な妥当性
 - 実行日：2026/10/18
-- Unity 側のコミット：○○（関門3と同じ）
-- bull_ope 側のコミット：○○（val_constant_depth_3cm・9cm・12cm、check_physics.py を追加）
+- Unity 側のコミット ： f6d7143b7645c8960ae5b8f8ff046186843241b2
+- bull_ope 側のコミット ： e230b8a474994adf6b9d3087290c3302587e3d18
 - 結果のフォルダ：
   - 深さを変えたデータ（正式な結果）：`data/validation/gate5/run_<日時>_gate5/`（深さ 3・6・9・12 cm を各2回、0.5 m/s、dirt_1）
   - 関門3の正式な結果（参考）：`data/validation/gate3/run_20261018_145751_gate3/`
