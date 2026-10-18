@@ -31,4 +31,4 @@
     上記手順を踏み、OperaSim側とROS2側の通信が確認出来たら、ROS Topic等を介して操作を行うことが出来る。
 
 ## 各パッケージのドキュメント
-- `bull_ope` : [作業データ収集用パッケージ](/docs/bull_ope.md)
+- `bull_ope` : [土質パラメータ推定用データ収集パッケージ](/docs/bull_ope/README.md)
