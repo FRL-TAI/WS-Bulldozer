@@ -70,7 +70,9 @@ def check_episode(name, df):
     if len(run) < 10:
         return [("走行中の行", "WARN", f"{len(run)} 行のため点検しない")]
     ok_rows = run[settled_mask(run)]
-    is_air, is_cut = name in AIR, name in CUT
+    is_air = name in AIR
+    is_cut = name in CUT or (run["target_depth"] > 0).mean() > 0.9           # 走行中ずっと削っているエピソード
+    straight = name in STRAIGHT or (run["cmd_wz"].abs().max() == 0 and run["cmd_vx"].min() > 0)
 
     # U1. 空中の力
     if is_air:
@@ -114,7 +116,7 @@ def check_episode(name, df):
                         f"ground_below − edge_z 中央値 {np.median(gap) * 100:+.2f} cm（土の山の表面を含む）"))
 
     # U5. 速度と距離
-    if name in STRAIGHT:
+    if straight:
         dt = np.diff(run["sim_time"].to_numpy(), prepend=run["sim_time"].iloc[0])
         integ = float(np.sum(run["v_forward"].to_numpy() * dt))
         dist = float(run["distance"].iloc[-1] - run["distance"].iloc[0])
@@ -135,7 +137,7 @@ def check_episode(name, df):
         judge = "OK" if np.median(fwd) > 0 and abs(np.median(lat)) < EDGE_LATERAL_MAX else "NG"
         res.append(("U6 刃先の位置", judge,
                     f"刃先の中点は車体の位置から 前方 {np.median(fwd):.2f} m・左方 {np.median(lat):+.2f} m（中央値）"))
-    if name in STRAIGHT:
+    if straight:
         drift = float(np.degrees(np.angle(np.exp(1j * (yaw[-1] - yaw[0])))))
         res.append(("U6 直進中の向き", "OK" if abs(drift) <= YAW_DRIFT_MAX else "WARN",
                     f"走行中の向きの変化 {drift:+.2f}°、横の速度 v_lateral の平均 {run['v_lateral'].mean():+.3f} m/s"))

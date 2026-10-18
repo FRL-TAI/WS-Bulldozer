@@ -87,24 +87,27 @@ def check_file(path, soil):
         res.append(("一定の列 ( 走行中 ) ", "OK" if not const else "WARN",
                     "想定外に一定: " + (", ".join(const) or "なし")))
 
-    # 5. ラベル
-    msgs, ok = [], True
-    for col, want, tol in [("label_c", soil["c"], 1.0), ("label_phi", soil["phi"], 0.01),
-                           ("label_rho0", soil["rho"], 0.5)]:
-        if col not in df:
-            msgs.append(f"{col} なし")
-            ok = False
-            continue
-        vals = df[col].dropna().unique()
-        if len(vals) != 1:
-            msgs.append(f"{col} が一定でない ( {len(vals)} 種類 ) ")
-            ok = False
-        elif want is not None and abs(vals[0] - want) > tol:
-            msgs.append(f"{col}={vals[0]:g} ( 指定 {want:g} ) ")
-            ok = False
-        else:
-            msgs.append(f"{col}={vals[0]:g}")
-    res.append(("ラベル", "OK" if ok else "NG", ", ".join(msgs)))
+    if soil is None:
+        res.append(("ラベル", "OK", "確認しない（--no-label）"))
+    else:
+        # 5. ラベル
+        msgs, ok = [], True
+        for col, want, tol in [("label_c", soil["c"], 1.0), ("label_phi", soil["phi"], 0.01),
+                            ("label_rho0", soil["rho"], 0.5)]:
+            if col not in df:
+                msgs.append(f"{col} なし")
+                ok = False
+                continue
+            vals = df[col].dropna().unique()
+            if len(vals) != 1:
+                msgs.append(f"{col} が一定でない ( {len(vals)} 種類 ) ")
+                ok = False
+            elif want is not None and abs(vals[0] - want) > tol:
+                msgs.append(f"{col}={vals[0]:g} ( 指定 {want:g} ) ")
+                ok = False
+            else:
+                msgs.append(f"{col}={vals[0]:g}")
+        res.append(("ラベル", "OK" if ok else "NG", ", ".join(msgs)))
 
     # 6. 進行状況の順番
     if "phase" in df:
@@ -137,6 +140,7 @@ def main():
     ap.add_argument("--phi", type=float, default=39.98, help="指定した内部摩擦角 [deg]")
     ap.add_argument("--rho", type=float, default=1474.0, help="指定した密度 [kg/m^3]")
     ap.add_argument("--report", help="結果を Markdown で保存するファイル名")
+    ap.add_argument("--no-label", action="store_true", help="ラベルの確認を飛ばす（土質が毎回違うデータ用）")
     a = ap.parse_args()
     soil = {"c": a.c, "phi": a.phi, "rho": a.rho}
 
@@ -146,7 +150,7 @@ def main():
         if "sim_time" not in pd.read_csv(path, nrows=0).columns:   # episodes.csv など、時系列データでないものは飛ばす
             print(f"\n==== {os.path.basename(path)} : 時系列データではないので飛ばす ====")
             continue
-        name, df, res = check_file(path, soil)
+        name, df, res = check_file(path, soil if not a.no_label else None)
         print(f"\n==== {os.path.basename(path)} ( {name}, {len(df)} 行, {len(df.columns)} 列 ) ====")
         lines += [f"## {os.path.basename(path)} ( {name} ) ", "", "| 項目 | 判定 | 詳細 |", "| --- | --- | --- |"]
         for item, judge, detail in res:
