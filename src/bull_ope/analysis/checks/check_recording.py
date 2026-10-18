@@ -143,6 +143,9 @@ def main():
     lines = ["# 記録の確認結果", ""]
     total = {"OK": 0, "WARN": 0, "NG": 0}
     for path in a.csv:
+        if "sim_time" not in pd.read_csv(path, nrows=0).columns:   # episodes.csv など、時系列データでないものは飛ばす
+            print(f"\n==== {os.path.basename(path)} : 時系列データではないので飛ばす ====")
+            continue
         name, df, res = check_file(path, soil)
         print(f"\n==== {os.path.basename(path)} ( {name}, {len(df)} 行, {len(df.columns)} 列 ) ====")
         lines += [f"## {os.path.basename(path)} ( {name} ) ", "", "| 項目 | 判定 | 詳細 |", "| --- | --- | --- |"]
