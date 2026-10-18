@@ -16,7 +16,7 @@
 | 4 | 時間のずれ | `val_*`、`ex_stop_and_go` | joint_states・global_pose は 20 ms、計算した速度は約 60 ms 遅れる。値はずらさず、時間窓を 1.2 秒以上にする | [gate4_timing.md](gate4_timing.md) |
 | 5 | 物理的な妥当性（土の力学の式・力のつり合い） | `val_constant_depth_*` | 前後の力 ≒ 小さな切り崩しの抵抗 ＋ 土の山の質量 × g × tanφ（傾き 1.05 倍）。約 20 kN で頭打ち。FEE のくさびの抵抗は主な成分ではない | [gate5_physics.md](gate5_physics.md) |
 | 6 | 再現性と識別可能性（土質を変えると区別できるほど反力が変わるか） | `val_sens_*` | c は貫入抵抗、ρ は頭打ちの上下の力で区別できる。φ は感度が低い（1エピソードで約 9°）。速度が頭打ちの前後の力に大きく効く | [gate6_sensitivity.md](gate6_sensitivity.md) |
-| 7 | 試験的な収集（本番と同じやり方で問題がないか） | `flat_cut`、`flat_piecewise`、`pile_push` | 30 件すべて ok。関門5・6の関係が、土質・速度を同時に変えても成り立つ（決定係数 0.95〜0.99）。`pile_push` は範囲を狭めて追加のデータとする | [gate7_pilot.md](gate7_pilot.md) |
+| 7 | 試験的な収集（本番と同じやり方で問題がないか） | `dataset_flat_cut`、`dataset_flat_piecewise`、`dataset_pile_push` | 30 件すべて ok。関門5・6の関係が、土質・速度を同時に変えても成り立つ（決定係数 0.95〜0.99）。`dataset_pile_push` は範囲を狭めて追加のデータとする | [gate7_pilot.md](gate7_pilot.md) |
 
 各レポートは「目的 → 手段（実行したコマンド） → 結果 → 考察 → 判定」の順に書いている。
 
@@ -45,7 +45,7 @@ python3 analysis/checks/<スクリプト> <出力フォルダ> --report <出力�
 | `check_timing.py` | 4、7 | T1 global_pose の遅れ、T2 届く間隔、T3 速度の指令 → 車体の速度、T4 排土板の指令 → 刃先の動き、T5 トピックの間の遅れ（相互相関） | 判定なし |
 | `check_physics.py` | 5 | P1 削った体積と前後の力、P2・P3 削り始めの力と FEE、P4 上下と前後の力の比、P5 履帯の駆動力のつり合い、P6 排土板を支える力。1つの土質のデータが前提。`--plot` で図を保存 | 判定なし |
 | `check_sensitivity.py` | 6 | 条件ごとの特徴量（`Fpen`、`Fx_sat`、`Fz_sat` など）、基準の繰り返しのばらつき、基準との差 z | \|z\| ≥ 3 を区別できるとみなす |
-| `check_dataset.py` | 7、本番 | D1 結果の内訳、D2 土質の広がり、D3 関門5・6の関係（`flat_cut` を対象に回帰）、D4 本番の見積もり（`--target` で件数を指定） | 判定なし |
+| `check_dataset.py` | 7、本番 | D1 結果の内訳、D2 土質の広がり、D3 関門5・6の関係（`dataset_flat_cut` を対象に回帰）、D4 本番の見積もり（`--target` で件数を指定） | 判定なし |
 
 `check_physics.py`・`check_sensitivity.py`・`check_dataset.py` は互いの関数を使うので、同じフォルダに置いたまま使う。
 

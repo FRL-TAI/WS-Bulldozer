@@ -97,7 +97,7 @@
 エピソードは乱数のシードから作られ、同じシードなら同じ土質・同じ操作のパラメータになる。
 
 ### 2.2 新しいエピソードの書き方
-`bull_ope/episodes/` の下のフォルダ（学習データ用なら `dataset/`）に、`Episode` を継承したクラスを書いたファイルを置くと、`collect_data` と `test_episode` が自動で見つける（`episodes/__init__.py` の `available_episodes()`）。置いたフォルダがグループ名になる。
+`bull_ope/episodes/` の下のフォルダに、`Episode` を継承したクラスを書いたファイルを置くと、`collect_data` と `test_episode` が自動で見つける（`episodes/__init__.py` の `available_episodes()`）。置いたフォルダがグループ名になる。
 
 ```python
 from ..episode import Command, Episode
@@ -124,24 +124,33 @@ class MyEpisode(Episode):
 | 後退しながら排土板を当てる動きは、学習データに入れない | AGX ではこの動きで土も力もほとんど生じない（関門3） |
 | 新しいエピソードは、`test_episode` で1回試してから集める | 動きと記録を確かめる |
 
-`--symlink-install` でビルドしていれば、ファイルを追加した後の再ビルドは不要。
+| フォルダ | 置くもの | 名前 |
+| --- | --- | --- |
+| `dataset/` | 本番の収集で使うものだけ | `dataset_*` |
+| `sandbox/` | 試作・旧版・サンプル。新しいエピソードはまずここで試す | `ex_*` |
+| `validation/` | 検証用 | `val_*`、`stress_*` |
+
+新しいエピソードは `sandbox/` で試し、本番に使うと決めたら `dataset/` に移して名前を `dataset_*` に変える。名前を変えると `episodes.jsonl` などに記録されるエピソード名も変わるので、本番の収集を始めた後は変えない。
+
+`--symlink-install` でビルドしていれば、ファイルを追加した後の再ビルドは不要（ファイルを移したり名前を変えたりしたときは、念のためビルドし直す）。
 
 
 ## 3. エピソードの一覧
 `ros2 run bull_ope test_episode --list` で一覧を表示できる。
 
-### 3.1 学習データ用（`dataset/`）
-| 名前 | 内容 | 状態 |
+### 3.1 学習データ用（`dataset/`、`dataset_*`）
+本番の収集（`scripts/run_production.sh`）で使うエピソードだけを置く。名前は `dataset_` で始める。
+
+| 名前 | ファイル | 内容 |
 | --- | --- | --- |
-| `flat_cut` | 平らな地形を、一定の深さ（6〜12 cm）・速度（0.3〜0.8 m/s）で 14 m 削る | **本番で使う**（[README の 2.1](README.md#21-採用したエピソード)） |
-| `flat_piecewise` | 14 m を3区間に分け、区間ごとに深さ（6〜12 cm）と速度（0.3〜0.8 m/s）を変えて削る | **本番で使う** |
-| `pile_push` | 前方 2〜4 m に緩い土の山（長さ 1〜2.5 m、高さ 0.2〜0.4 m）を積み、深さ 0〜4 cm で押しながら 14 m 進む（要 `AGX_GRID_CONTROL`） | **本番で使う（追加のデータ）** |
-| `flat_constant` | 平らな地形を、一定の深さ（3〜12 cm）・速度（0.3〜1.0 m/s）で 10 m 削る | 旧版。`flat_cut` に置き換えた（10 m では頭打ちまで届かないことが多い） |
-| `compacted_strips` | 地山・踏み固め・緩みの帯を横切って一定の深さで削る（要 `AGX_GRID_CONTROL`） | 未検証（`compaction_rect` は関門で確かめていない） |
-| `shuttle_3x5m` | 特定の土質で、5 m の区間を3往復する | 土質が固定なので学習データには使わない |
+| `dataset_flat_cut` | `flat_cut.py` | 平らな地形を、一定の深さ（6〜12 cm）・速度（0.3〜0.8 m/s）で 14 m 削る（主なデータ） |
+| `dataset_flat_piecewise` | `flat_cut.py` | 14 m を3区間に分け、区間ごとに深さ（6〜12 cm）と速度（0.3〜0.8 m/s）を変えて削る（主なデータ） |
+| `dataset_pile_push` | `pile_push.py` | 前方 2〜4 m に緩い土の山（長さ 1〜2.5 m、高さ 0.2〜0.4 m）を積み、深さ 0〜4 cm で押しながら 14 m 進む（追加のデータ。要 `AGX_GRID_CONTROL`） |
+
+設計の根拠は [README の 2.1](README.md#21-採用したエピソード)。土質の範囲（`DATASET_SOIL`）、深さ・速度の範囲は `flat_cut.py` にまとめて定義し、`pile_push.py` もそれを使う。
 
 ### 3.2 サンプル集（`sandbox/`、`ex_*`）
-ROS 側で変えられる自由度（動き・土質・地形）を一通り示すもの。`test_episode` で試す。
+ROS 側で変えられる自由度（動き・土質・地形）を示すサンプルと、本番には使わない試作・旧版のエピソードを置く。名前は `ex_` で始める。`test_episode` で試す。
 
 | 名前 | 内容 |
 | --- | --- |
@@ -155,6 +164,9 @@ ROS 側で変えられる自由度（動き・土質・地形）を一通り示�
 | `ex_soil_random_all` | 5つの土質パラメータをすべて乱数で決めて 10 m 削る |
 | `ex_terrain_compaction_map` | パッチごとに締固めの程度を変えて削る（要 `AGX_GRID_CONTROL`） |
 | `ex_terrain_loose_pile` | 前方 2〜4 m に厚さ 50 cm の緩い土の山を積み、押し広げる（要 `AGX_GRID_CONTROL`） |
+| `ex_flat_constant` | 平らな地形を、一定の深さ（3〜12 cm）・速度（0.3〜1.0 m/s）で 10 m 削る。`dataset_flat_cut` の旧版（10 m では頭打ちまで届かないことが多い） |
+| `ex_compacted_strips` | 地山・踏み固め・緩みの帯を横切って一定の深さで削る（要 `AGX_GRID_CONTROL`）。`compaction_rect` は関門で確かめていない |
+| `ex_shuttle_3x5m` | 特定の土質で、5 m の区間を3往復する（前進で削り、排土板を上げて後退で戻る） |
 
 ### 3.3 検証用（`validation/`）
 検証用のエピソードは、学習データには使わない。どの関門で使ったかは [検証のドキュメント](validation/README.md) を参照。

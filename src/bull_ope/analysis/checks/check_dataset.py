@@ -8,7 +8,7 @@
 
   D1. 結果の内訳      ok / error / skipped の件数。error の理由と、そのときの土質・深さ・速度
   D2. 土質の広がり    ラベル（AGX から読み戻した値）の最小・最大と、範囲を5等分したときの件数（偏りがないか）
-  D3. 関門5・6の関係が、土質を同時に変えても成り立つか（flat_cut の ok のエピソード）
+  D3. 関門5・6の関係が、土質を同時に変えても成り立つか（dataset_flat_cut の ok のエピソード）
         Fpen   = a + b c                   （関門6：b ≒ 0.65 kN/kPa）
         Fz_sat = a + b ρ + b' c            （関門6：b ≒ 7.1 N/(kg/m³)）
         Fx_sat = a + b ρ tanφ + b' c + b'' v（関門5・6）
@@ -104,8 +104,8 @@ def main():
     out("")
 
     # D3. 関門5・6の関係
-    fc = t[(t["name"] == "flat_cut")].dropna(subset=["Fpen"])
-    out(f"## D3. 関門5・6の関係（flat_cut の ok のエピソード {len(fc)} 件）")
+    fc = t[t["name"].isin(["dataset_flat_cut", "flat_cut"])].dropna(subset=["Fpen"])   # flat_cut は名前を変える前のデータ
+    out(f"## D3. 関門5・6の関係（dataset_flat_cut の ok のエピソード {len(fc)} 件）")
     out("")
     if len(fc) >= 5:
         c_kpa = fc["c"].astype(float) / 1000

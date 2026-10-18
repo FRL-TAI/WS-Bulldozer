@@ -8,7 +8,7 @@ from ..episode import Command, Episode, TerrainOp
 
 class ExTerrainLoosePile(Episode):
     name = "ex_terrain_loose_pile"
-    description = "【地形】前方 2〜4 m に厚さ 50 cm の緩い土の山を積み、地面の高さで押し広げる（要 AGX_GRID_CONTROL）"
+    description = "【地形】前方 2〜4 m に厚さ 50 cm の緩い土の山を積み、地面の高さで押し広げる"
     REQUIRES_GRID_CONTROL = True
 
     def terrain_ops(self):

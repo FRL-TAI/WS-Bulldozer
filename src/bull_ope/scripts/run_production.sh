@@ -6,7 +6,7 @@
 #   bash src/bull_ope/scripts/run_production.sh <最初の区切りの番号> <最後の区切りの番号>
 #   例：bash src/bull_ope/scripts/run_production.sh 1 3    # 区切り 1〜3 を続けて実行
 #
-# 1つの区切り = flat_cut N_CUT 件 + flat_piecewise N_PW 件 + pile_push N_PILE 件
+# 1つの区切り = dataset_flat_cut N_CUT 件 + dataset_flat_piecewise N_PW 件 + dataset_pile_push N_PILE 件
 #   （既定 60 + 30 + 0 = 90 件、約 55 分）。件数は環境変数で変えられる：
 #   N_PILE=20 bash src/bull_ope/scripts/run_production.sh 1 1
 # 区切りごとに --seed を変えるので、同じ区切りを実行し直しても同じ計画が再現される。
@@ -19,7 +19,7 @@ LAST=${2:?最後の区切りの番号を指定してください}
 N_CUT=${N_CUT:-60}
 N_PW=${N_PW:-30}
 N_PILE=${N_PILE:-0}
-SEED_BASE=${SEED_BASE:-1000}     # 区切り k の seed は SEED_BASE + 10 k（+0：flat_cut、+1：flat_piecewise、+2：pile_push）
+SEED_BASE=${SEED_BASE:-1000}     # 区切り k の seed は SEED_BASE + 10 k（+0：dataset_flat_cut、+1：dataset_flat_piecewise、+2：dataset_pile_push）
 
 # このスクリプトの場所から、パッケージとワークスペースの場所を求める（どこから実行してもよいように）
 PKG=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)      # .../src/bull_ope
@@ -47,9 +47,9 @@ for k in $(seq "$FIRST" "$LAST"); do
   tag=$(printf "chunk%03d" "$k")
   echo "===== $(date '+%F %T') 区切り $tag 開始" | tee -a "$LOG"
   DIRS=()
-  run_one flat_cut "$N_CUT" $((SEED_BASE + 10 * k)) "${tag}_cut"
-  run_one flat_piecewise "$N_PW" $((SEED_BASE + 10 * k + 1)) "${tag}_pw"
-  run_one pile_push "$N_PILE" $((SEED_BASE + 10 * k + 2)) "${tag}_pile"
+  run_one dataset_flat_cut "$N_CUT" $((SEED_BASE + 10 * k)) "${tag}_cut"
+  run_one dataset_flat_piecewise "$N_PW" $((SEED_BASE + 10 * k + 1)) "${tag}_pw"
+  run_one dataset_pile_push "$N_PILE" $((SEED_BASE + 10 * k + 2)) "${tag}_pile"
   python3 "$CHECKS/check_dataset.py" "${DIRS[@]}" --report "$OUT/${tag}_check_dataset.md" > /dev/null
   grep -E "エピソード .* 件：" "$OUT/${tag}_check_dataset.md" | sed "s|^|  |" | tee -a "$LOG"
   echo "===== $(date '+%F %T') 区切り $tag 終了" | tee -a "$LOG"

@@ -10,7 +10,7 @@ MAXIMUM_DENSITY = 2000.0
 
 class ExTerrainCompactionMap(Episode):
     name = "ex_terrain_compaction_map"
-    description = "【地形】前後 2 m × 左右 2 分割のパッチごとに締固めの程度を変えて削る（要 AGX_GRID_CONTROL）"
+    description = "【地形】前後 2 m × 左右 2 分割のパッチごとに締固めの程度を変えて削る"
     REQUIRES_GRID_CONTROL = True
 
     def sample_params(self, rng):

@@ -2,8 +2,8 @@ from ..episode import Command, Episode
 
 
 class FlatConstantDepth(Episode):
-    name = "flat_constant"
-    description = "平らな地形を、一定の切削深さ・一定の速度で直進する"
+    name = "ex_flat_constant"
+    description = "【動き】平らな地形を、一定の切削深さ・一定の速度で直進する"
 
     def sample_params(self, rng):
         return {

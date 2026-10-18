@@ -46,4 +46,4 @@
 | `SAFE_RADIUS` | 20 m | 開始位置からこの距離を超えたら止める。「開始位置からフィールドの一番近い端までの距離」より小さくする。None で確かめない | 関門1（`stress_runaway`） |
 | `DEPTH_MIN`、`DEPTH_MAX` | −0.5 m、0.20 m | 目標の深さの範囲。範囲外の指示は範囲に収める（負は地面より上） | 関門1（`stress_depth_limits`） |
 | `MAX_TILT_DEG` | 20° | 開始時からのピッチ・ロールの変化の上限。超えたら止める | 関門1 |
-| `MAX_ACTUAL_DEPTH` | 0.35 m | 実際の切削深さの上限。超えたら止める（転倒の兆候）。上げる区間では止めずに記録する | 関門1（`stress_heavy_push`）、関門7（`pile_push`） |
+| `MAX_ACTUAL_DEPTH` | 0.35 m | 実際の切削深さの上限。超えたら止める（転倒の兆候）。上げる区間では止めずに記録する | 関門1（`stress_heavy_push`）、関門7（`dataset_pile_push`） |

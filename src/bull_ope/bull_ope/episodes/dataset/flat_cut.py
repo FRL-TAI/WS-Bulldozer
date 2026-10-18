@@ -23,7 +23,7 @@ SPEED_RANGE = (0.3, 0.8)     # m/s
 
 class FlatCut(Episode):
     """平らな地形を、一定の深さ・一定の速度で 14 m 削る"""
-    name = "flat_cut"
+    name = "dataset_flat_cut"
     description = "平らな地形を、一定の深さ（6〜12 cm）・速度（0.3〜0.8 m/s）で 14 m 削る"
     SOIL_RANGES = DATASET_SOIL
     MAX_DISTANCE = 14.0      # m
@@ -41,7 +41,7 @@ class FlatCut(Episode):
 
 class FlatPiecewise(Episode):
     """平らな地形を 14 m 削る。3つの区間ごとに深さと速度を変える（推定器が変化する条件を学べるように）"""
-    name = "flat_piecewise"
+    name = "dataset_flat_piecewise"
     description = "平らな地形を 14 m 削る。約 4.7 m ごとに深さ（6〜12 cm）と速度（0.3〜0.8 m/s）を変える"
     SOIL_RANGES = DATASET_SOIL
     MAX_DISTANCE = 14.0

@@ -33,8 +33,8 @@ src/bull_ope/
 │  ├ recording/             recorder.py（CSV への記録）、json_utils.py（JSON に書く前の型の変換）
 │  ├ episodes/
 │  │  ├ episode.py          エピソードの基底クラスとデータ構造
-│  │  ├ dataset/            学習データ用（flat_cut、flat_piecewise、pile_push など）
-│  │  ├ sandbox/            ROS 側で変えられる自由度のサンプル集（ex_*）
+│  │  ├ dataset/            本番の収集で使う学習データ用（名前は dataset_*）
+│  │  ├ sandbox/            試作・旧版・自由度のサンプル集（名前は ex_*）
 │  │  └ validation/
 │  │     ├ data_check/      検証用（val_*、val_sens_*）
 │  │     └ stress/          不具合探し用（stress_*）
@@ -64,9 +64,9 @@ docs/bull_ope/              このドキュメント
 
 | エピソード | 動き | 用途 |
 | --- | --- | --- |
-| `flat_cut` | 平らな地形を、一定の深さ・一定の速度で 14 m 削りながら直進する | 主なデータ。関門5・6で調べた関係（土の量と力、土質と力）がそのまま当てはまる |
-| `flat_piecewise` | 14 m を3つの区間（約 4.7 m ずつ）に分け、区間ごとに深さと速度を変えて削る | 主なデータ。条件が途中で変わる場合も推定器が扱えるようにする |
-| `pile_push` | 前方 2〜4 m に緩い土の山（長さ 1〜2.5 m、高さ 0.2〜0.4 m、幅 3.0 m）を積み、浅く削り（深さ 0〜4 cm）ながら押して 14 m 進む | 追加のデータ。主なデータとは別のフォルダに集め、学習に使うかを後で選ぶ |
+| `dataset_flat_cut` | 平らな地形を、一定の深さ・一定の速度で 14 m 削りながら直進する | 主なデータ。関門5・6で調べた関係（土の量と力、土質と力）がそのまま当てはまる |
+| `dataset_flat_piecewise` | 14 m を3つの区間（約 4.7 m ずつ）に分け、区間ごとに深さと速度を変えて削る | 主なデータ。条件が途中で変わる場合も推定器が扱えるようにする |
+| `dataset_pile_push` | 前方 2〜4 m に緩い土の山（長さ 1〜2.5 m、高さ 0.2〜0.4 m、幅 3.0 m）を積み、浅く削り（深さ 0〜4 cm）ながら押して 14 m 進む | 追加のデータ。主なデータとは別のフォルダに集め、学習に使うかを後で選ぶ |
 
 各エピソードの流れ（読み込み直し → 土質の設定 → 排土板を下げる → 走る → 上げる）は [episodes.md](episodes.md#1-1エピソードの流れ) を参照。
 
@@ -79,7 +79,7 @@ docs/bull_ope/              このドキュメント
 | 密度 ρ | 1,200〜1,900 kg/m³ | 同上（AGX の Maximum Density 2,000 kg/m³ 未満） |
 | 膨張率・ヤング率 | 変えない（1.28、6.5 MPa） | 関門6で調べていない |
 | 土質の決め方 | ラテン超方格法（範囲内に偏りなく配置） | 関門7で、範囲を5等分したどの区間にも偏りなく入ることを確認 |
-| 深さ | `flat_cut`・`flat_piecewise`：6〜12 cm、`pile_push`：0〜4 cm | 関門5で確かめた範囲。`pile_push` は関門7で潜りにくい範囲に狭めた |
+| 深さ | `dataset_flat_cut`・`dataset_flat_piecewise`：6〜12 cm、`dataset_pile_push`：0〜4 cm | 関門5で確かめた範囲。`dataset_pile_push` は関門7で潜りにくい範囲に狭めた |
 | 速度 | 0.3〜0.8 m/s | 関門6：頭打ちの前後の力が速度にほぼ比例するので、速度を変える |
 | 距離 | 14 m | 深さ 6 cm でも削った体積が約 2.5 m³ になり、頭打ちの特徴が取れる（関門5・6） |
 | 入れない動き | 後退しながら排土板を当てる動き | 関門3：AGX ではこの動きで土も力もほとんど生じない |
@@ -97,10 +97,10 @@ docs/bull_ope/              このドキュメント
 
 ```
 cd /workspaces/ws-bulldozer
-# 主なデータ：区切り 1〜12（1区切り = flat_cut 60 件 + flat_piecewise 30 件、約 55 分）
+# 主なデータ：区切り 1〜12（1区切り = dataset_flat_cut 60 件 + dataset_flat_piecewise 30 件、約 55 分）
 bash src/bull_ope/scripts/run_production.sh 1 12
 
-# 追加のデータ（pile_push）：別の出力先に集める
+# 追加のデータ（dataset_pile_push）：別の出力先に集める
 N_CUT=0 N_PW=0 N_PILE=30 OUT=src/bull_ope/data/production_pile \
     bash src/bull_ope/scripts/run_production.sh 1 3
 ```
@@ -109,11 +109,11 @@ N_CUT=0 N_PW=0 N_PILE=30 OUT=src/bull_ope/data/production_pile \
 | --- | --- | --- |
 | 1つ目の引数 | — | 最初の区切りの番号 |
 | 2つ目の引数 | — | 最後の区切りの番号 |
-| `N_CUT` | 60 | 1区切りの `flat_cut` の件数 |
-| `N_PW` | 30 | 1区切りの `flat_piecewise` の件数 |
-| `N_PILE` | 0 | 1区切りの `pile_push` の件数 |
+| `N_CUT` | 60 | 1区切りの `dataset_flat_cut` の件数 |
+| `N_PW` | 30 | 1区切りの `dataset_flat_piecewise` の件数 |
+| `N_PILE` | 0 | 1区切りの `dataset_pile_push` の件数 |
 | `OUT` | `src/bull_ope/data/production` | 出力先 |
-| `SEED_BASE` | 1000 | 区切り k の乱数のシードは `SEED_BASE + 10k`（`flat_cut`）、`+1`（`flat_piecewise`）、`+2`（`pile_push`） |
+| `SEED_BASE` | 1000 | 区切り k の乱数のシードは `SEED_BASE + 10k`（`dataset_flat_cut`）、`+1`（`dataset_flat_piecewise`）、`+2`（`dataset_pile_push`） |
 
 - 区切りごとにシードが決まっているので、途中で止まった区切りは、同じ番号で実行し直せば同じ計画が再現される。
 - 区切りが終わるたびに `check_collection.py` と `check_dataset.py` が実行され、要約が `<OUT>/production.log` に追記される。「想定外・要確認の項目 : 0 件」が並んでいれば正常。
@@ -160,7 +160,7 @@ N_CUT=0 N_PW=0 N_PILE=30 OUT=src/bull_ope/data/production_pile \
 ```json
 {"command": "reload"}
 
-{"command": "setup", "request_id": 12, "episode_name": "pile_push", "episode_index": 3, "total_episodes": 30,
+{"command": "setup", "request_id": 12, "episode_name": "dataset_pile_push", "episode_index": 3, "total_episodes": 30,
  "phase": "setup",
  "soil": {"cohesion": 15000, "friction_angle_deg": 35, "density": 1600, "swell_factor": -1, "youngs_modulus": -1},
  "terrain_ops": [{"type": "loose_layer_rect", "x_start": 2.5, "x_end": 4.5, "y_min": -1.5, "y_max": 1.5,
@@ -176,7 +176,7 @@ N_CUT=0 N_PW=0 N_PILE=30 OUT=src/bull_ope/data/production_pile \
 **`/sim/episode_status` の例**
 
 ```json
-{"boot_id": 1733042, "request_id": 12, "episode_name": "pile_push", "episode_index": 3, "total_episodes": 30,
+{"boot_id": 1733042, "request_id": 12, "episode_name": "dataset_pile_push", "episode_index": 3, "total_episodes": 30,
  "phase": "running", "cohesion": 15000.0, "friction_angle_deg": 35.0, "density": 1600.0, "swell_factor": 1.28,
  "youngs_modulus": 6500000.0, "ops_requested": 1, "ops_applied": true, "ops_cells": 60,
  "grid_control_enabled": true, "reset_count": 1, "sim_time": 123.4, "error": ""}
@@ -214,7 +214,7 @@ N_CUT=0 N_PW=0 N_PILE=30 OUT=src/bull_ope/data/production_pile \
 | 派生量（bull_ope） | `ground_h0` | 開始時に刃先の 0.5 m 前で 0.5 秒間測った地面の高さの中央値 [m]。切削深さの基準 |
 | | `depth` | 切削深さ [m] = `ground_h0` − `edge_z`（正で元の地面より下） |
 | | `speed`、`distance` | 水平の速さ [m/s]（向きなし）、開始位置からの距離 [m] |
-| | `cut_volume` | それまでに地山を削った体積 [m³]（`blade_width` × `depth` × 前進速度 × Δt の積算）。`pile_push` で積んだ山の量は含まない |
+| | `cut_volume` | それまでに地山を削った体積 [m³]（`blade_width` × `depth` × 前進速度 × Δt の積算）。`dataset_pile_push` で積んだ山の量は含まない |
 | | `slip_ratio` | 履帯のスリップ率（`SPROCKET_RADIUS` が未設定なので NaN） |
 | ラベル（episode_status） | `label_c`、`label_phi`、`label_rho0`、`label_swell`、`label_E0` | AGX から読み戻した土質（推定の正解） |
 
@@ -227,7 +227,7 @@ N_CUT=0 N_PW=0 N_PILE=30 OUT=src/bull_ope/data/production_pile \
 | 深さの揺れ | 平均では目標どおりだが、速いほど揺れが大きい（95% の幅：0.5 m/s で約 2 cm、0.75 m/s で最大 7 cm）。学習には実際の `depth` を使う（関門3・7） |
 | 力の頭打ち | 前後の力は削った土の量に比例して増え（傾き ≒ ρ g tanφ）、約 1.5〜2 m³ 以上で頭打ちになる（関門5） |
 | 記録の最初 | 記録の最初の `depth` は約 13 cm（シーンの初期状態で排土板が地面にめり込んでいるため）。下げる区間は学習に使わない（関門3） |
-| 潜ったエピソード | `pile_push` では約 5% のエピソードで、排土板が目標より大きく潜る（深さのずれの 95% が 10 cm 超）。学習から除く条件を決めて使う（関門7） |
+| 潜ったエピソード | `dataset_pile_push` では約 5% のエピソードで、排土板が目標より大きく潜る（深さのずれの 95% が 10 cm 超）。学習から除く条件を決めて使う（関門7） |
 
 出力のフォルダの構成と `episodes.jsonl` の列は [output_data.md](output_data.md) を参照。
 

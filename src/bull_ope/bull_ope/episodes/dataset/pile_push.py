@@ -22,8 +22,8 @@ PILE_WIDTH = 3.0     # m
 
 class PilePush(Episode):
     """前方に緩い土の山を積み、それを押しながら 14 m 進む"""
-    name = "pile_push"
-    description = "前方 2〜4 m に緩い土の山（長さ 1〜2.5 m、高さ 0.2〜0.4 m）を積み、深さ 0〜4 cm で押しながら 14 m 進む（要 AGX_GRID_CONTROL）"
+    name = "dataset_pile_push"
+    description = "前方 2〜4 m に緩い土の山（長さ 1〜2.5 m、高さ 0.2〜0.4 m）を積み、深さ 0〜4 cm で押しながら 14 m 進む"
     SOIL_RANGES = DATASET_SOIL
     REQUIRES_GRID_CONTROL = True
     MAX_DISTANCE = 14.0
@@ -31,10 +31,10 @@ class PilePush(Episode):
 
     def sample_params(self, rng):
         return {
-            "pile_start": float(rng.uniform(2.0, 4.0)),    # 開始時の刃先からの距離 [m]（1.5 → 2.0。走り出してから当たるように）
-            "pile_length": float(rng.uniform(1.0, 2.5)),   # 前後の長さ [m]（3.0 → 2.5）
-            "pile_height": float(rng.uniform(0.2, 0.4)),   # 高さ [m]（0.5 → 0.4）
-            "depth": float(rng.uniform(0.0, 0.04)),        # 切削深さ [m]（0.06 → 0.04）
+            "pile_start": float(rng.uniform(2.0, 4.0)),    # 開始時の刃先からの距離 [m]
+            "pile_length": float(rng.uniform(1.0, 2.5)),   # 前後の長さ [m]
+            "pile_height": float(rng.uniform(0.2, 0.4)),   # 高さ [m]（排土板の高さ 約 0.96 m の半分以下）
+            "depth": float(rng.uniform(0.0, 0.04)),        # 切削深さ [m]
             "speed": float(rng.uniform(*SPEED_RANGE)),     # m/s
         }
 

@@ -2,7 +2,7 @@
 
 例：
   ros2 run bull_ope collect_data --list
-  ros2 run bull_ope collect_data --episodes flat_constant flat_sine --num 20 --sampling lhs
+  ros2 run bull_ope collect_data --episodes dataset_flat_cut dataset_flat_piecewise --num 20 --sampling lhs
   ros2 run bull_ope collect_data --episodes all --num 5 --run-name pilot
 
 出力（<DATA_DIR>/<実行名>/）：

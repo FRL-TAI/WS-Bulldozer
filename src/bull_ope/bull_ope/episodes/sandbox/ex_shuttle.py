@@ -10,8 +10,8 @@ SOIL = {"cohesion": 2100.0, "friction_angle_deg": 39.98, "density": 1474.0}
 
 
 class Shuttle(Episode):
-    name = "shuttle_3x5m"
-    description = "特定の土質で、5 m の区間を3往復する"
+    name = "ex_shuttle_3x5m"
+    description = "【動き】特定の土質で、5 m の区間を3往復する"
     SOIL_RANGES = {k: (v, v) for k, v in SOIL.items()}   # 下限 = 上限 にして土質を固定
 
     LENGTH = 5.0          # 区間の長さ [m]

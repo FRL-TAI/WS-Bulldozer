@@ -10,8 +10,8 @@ class CompactedStrips(Episode):
     作業中に変化する土の状態（締固めの程度）を含むデータを作るためのエピソード。
     Unity 側で AGX_GRID_CONTROL が有効になっている必要がある。
     """
-    name = "compacted_strips"
-    description = "締固めの程度が異なる帯（地山・踏み固め・緩み）を横切って一定深さで削る"
+    name = "ex_compacted_strips"
+    description = "【地形】締固めの程度が異なる帯（地山・踏み固め・緩み）を横切って一定深さで削る"
     REQUIRES_GRID_CONTROL = True
 
     def sample_params(self, rng):

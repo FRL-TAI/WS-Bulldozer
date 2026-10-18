@@ -46,8 +46,8 @@ ros2 run bull_ope test_episode [エピソード名] [オプション]
 ```
 ros2 run bull_ope test_episode --list
 ros2 run bull_ope test_episode --calibrate                              # 初回に一度（LIFT_SIGN の確認）
-ros2 run bull_ope test_episode flat_cut --seed 0
-ros2 run bull_ope test_episode flat_cut --c 30000 --phi 50 --rho 1900   # 最も重い土で試す
+ros2 run bull_ope test_episode dataset_flat_cut --seed 0
+ros2 run bull_ope test_episode dataset_flat_cut --c 30000 --phi 50 --rho 1900   # 最も重い土で試す
 ros2 run bull_ope test_episode val_constant_depth --out src/bull_ope/data/validation/gate3/kp3
 ```
 
@@ -87,7 +87,7 @@ ros2 run bull_ope collect_data --episodes val_static val_air_run val_constant_de
     --num 3 --seed 0 --run-name gate2 --out src/bull_ope/data/validation/gate2
 
 # 試験的な収集（関門7）
-ros2 run bull_ope collect_data --episodes flat_cut --num 20 --seed 100 \
+ros2 run bull_ope collect_data --episodes dataset_flat_cut --num 20 --seed 100 \
     --run-name pilot_cut --out src/bull_ope/data/pilot
 ```
 
