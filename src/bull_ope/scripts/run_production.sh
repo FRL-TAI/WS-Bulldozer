@@ -28,7 +28,9 @@ CHECKS=$PKG/analysis/checks
 OUT=${OUT:-$PKG/data/production}
 
 cd "$WS"
+set +u                 # ROS2 の setup.bash は未定義の変数を使うので、読み込む間だけ外す
 source install/setup.bash
+set -u
 mkdir -p "$OUT"
 LOG="$OUT/production.log"
 
