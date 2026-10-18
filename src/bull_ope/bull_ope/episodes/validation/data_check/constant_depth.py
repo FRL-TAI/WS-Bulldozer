@@ -17,3 +17,24 @@ class ValidationConstantDepth(ValidationEpisode):
 
     def operation(self, obs):
         return Command(speed=self.SPEED, depth=self.DEPTH)
+
+
+class ValidationConstantDepth3(ValidationConstantDepth):
+    """val_constant_depth の深さを 3 cm にしたもの（関門5：深さと力の関係）"""
+    name = "val_constant_depth_3cm"
+    description = "【検証】深さ 3 cm・速度 0.5 m/s で 10 m 削る"
+    DEPTH = 0.03
+
+
+class ValidationConstantDepth9(ValidationConstantDepth):
+    """val_constant_depth の深さを 9 cm にしたもの（関門5：深さと力の関係）"""
+    name = "val_constant_depth_9cm"
+    description = "【検証】深さ 9 cm・速度 0.5 m/s で 10 m 削る"
+    DEPTH = 0.09
+
+
+class ValidationConstantDepth12(ValidationConstantDepth):
+    """val_constant_depth の深さを 12 cm にしたもの（関門5：深さと力の関係）"""
+    name = "val_constant_depth_12cm"
+    description = "【検証】深さ 12 cm・速度 0.5 m/s で 10 m 削る"
+    DEPTH = 0.12
