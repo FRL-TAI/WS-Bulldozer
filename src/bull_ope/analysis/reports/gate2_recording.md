@@ -1,7 +1,7 @@
 # 関門2：記録の健全さ
 - 実行日：2026/10/18
-- Unity 側のコミット：○○（関門1の修正と、SceneReloader の HUD の見出しのクリアを含む）
-- bull_ope 側のコミット：○○（check_gate2.py の追加と、check_recording.py の修正を含む）
+- Unity 側のコミット ： b2e83dd8d4fc064083176bf0eb1c14ef07d3e88d
+- bull_ope 側のコミット：e63849ec99ed5b4bc0916427f3b15ffd5f48936e
 - 結果のフォルダ：`data/validation/gate2/run_20261018_132744_gate2/`
 - 実行したエピソード：val_static、val_air_run、val_constant_depth、val_depth_step を各3回（`--seed 0`、計 12 件）
 - 目的：データが抜けなく、食い違いなく記録されているかを確かめる。値が物理的に正しいか（力の向き、深さの追従など）は関門3以降で扱う
@@ -12,10 +12,10 @@
 
 | エピソード | 機体の動き | 判定 |
 | --- | --- | --- |
-| val_static | ○○（排土板を上げて、10 秒間止まっている） | |
-| val_air_run | ○○（排土板を上げたまま、10 m まっすぐ進む） | |
-| val_constant_depth | ○○（排土板を下げて 10 m 削る。土が排土板の前にたまる） | |
-| val_depth_step | ○○（3 m ごとに深く削るようになる） | |
+| val_static | 排土板を上げて、10 秒間止まっている | OK |
+| val_air_run | 排土板を上げたまま、10 m まっすぐ進む | OK |
+| val_constant_depth | 排土板を下げて 10 m 削る。土が排土板の前にたまる | OK |
+| val_depth_step | 3 m ごとに深く削るようになる | OK |
 
 
 ## 点検の結果
@@ -74,7 +74,7 @@
 - 同じ値の連続：最大 6 行（0.12 s）
 - `global_pose` の遅れ（`sim_time` − `pose_stamp`）：中央値 20 ms、最大 120 ms
 - 更新の頻度は 12 エピソードを通して一定で、下がっていかない。関門1の段階D（HUD の修正前）では、画面の更新の速さの低下とともに更新の割合が 約 75% → 約 55〜60% に下がっていた。HUD の修正の後は、この低下がなくなった
-- OperaSim の `global_pose`・`joint_states` の配信のしかた：○○（`Update` / `FixedUpdate`、頻度の設定の有無）
+- OperaSim の `global_pose`・`joint_states` の配信のしかた：`Update` / `FixedUpdate`、頻度の設定の有無）
 - 繰り返しの差：走行の行数 1.2% 以内、距離 0.4% 以内（関門6の再現性の確認の目安）
 - 排土板の前にたまる土の山の長さ：1.0〜1.25 m 程度（`ground_profile` が変わる範囲）
 
