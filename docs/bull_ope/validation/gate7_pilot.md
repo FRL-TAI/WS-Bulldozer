@@ -3,10 +3,12 @@
 
 | 項目 | 内容 |
 | --- | --- |
-| 実行日 | 2026/10/18 |
-| Unity 側のコミット | f6d7143b7645c8960ae5b8f8ff046186843241b2 |
-| bull_ope 側のコミット | 0add0d3148f602c2496a045a2994ab23d0336e23（`flat_cut`・`flat_piecewise`、`check_dataset.py`、`check_units.py`・`check_recording.py` の修正） |
-| 結果のフォルダ | `data/pilot/run_20261018_171303_pilot_cut/`（`flat_cut` × 20）、`run_20261018_172539_pilot_pw/`（`flat_piecewise` × 10）、`run_20261018_175743_pilot_pile/`（`pile_push` × 10）、`run_20261018_180659_pilot_pile2/`（`pile_push` × 20、範囲を狭めた後）、まとめ：`data/pilot/check_*.md` |
+| 前提 | 関門1〜6 |
+| 使うエピソード | `flat_cut`、`flat_piecewise`、`pile_push` |
+| 主な道具 | 関門1〜6の点検の道具、`check_dataset.py` |
+| 結果の保存先 | `data/pilot/`（`run_<日時>_pilot_cut/`、`run_<日時>_pilot_pw/`、`run_<日時>_pilot_pile/`、`run_<日時>_pilot_pile2/`、まとめの `check_*.md`） |
+| 所要時間の目安 | 約 1 時間 |
+| 検証した環境 | Unity 2022.3.16f1、AGX Dynamics 2.37.3.0（AGXUnity 5.0.1）、ROS2 Humble |
 
 
 ## 1. 目的
@@ -36,7 +38,7 @@ ros2 run bull_ope collect_data --episodes flat_piecewise --num 10 --seed 101 --r
 
 # (c) まとめて点検する
 cd src/bull_ope
-PC=data/pilot/run_20261018_171303_pilot_cut; PW=data/pilot/run_20261018_172539_pilot_pw
+PC=data/pilot/run_<日時>_pilot_cut; PW=data/pilot/run_<日時>_pilot_pw
 for d in $PC $PW; do
   python3 analysis/checks/check_collection.py $d --report $d/check_collection.md
   python3 analysis/checks/check_recording.py $d/ep[0-9]*.csv --no-label --report $d/check_recording.md

@@ -3,10 +3,12 @@
 
 | 項目 | 内容 |
 | --- | --- |
-| 実行日 | 2026/10/16（最終版の実行） |
-| Unity 側のコミット | 23891164333da770191d783ff69f759c74d22073 |
-| bull_ope 側のコミット | 791505cd44ac2d58aed7344306a5492c7c312ed9 |
-| 結果のフォルダ | 段階A：`data/validation/stress/20261016_194312/`、段階B2・B・C・D：`data/validation/stress/20261016_194616/` |
+| 前提 | なし（最初の関門） |
+| 使うエピソード | `stress_*`（[一覧](../episodes.md#33-検証用validation)） |
+| 主な道具 | `run_stress_tests.sh`、`check_collection.py`、`check_recording.py`、Unity の Editor.log |
+| 結果の保存先 | `data/validation/stress/<実行日時>/` |
+| 所要時間の目安 | 段階A 約 10 分、段階B2〜D 約 30 分 |
+| 検証した環境 | Unity 2022.3.16f1、AGX Dynamics 2.37.3.0（AGXUnity 5.0.1）、ROS2 Humble |
 
 
 ## 1. 目的
@@ -35,7 +37,7 @@ bash src/bull_ope/analysis/scripts/run_stress_tests.sh B2 B C D   # 段階B2〜D
 
 # 段階A の CSV の点検
 cd src/bull_ope
-R=data/validation/stress/20261016_194312
+R=data/validation/stress/<段階A の実行日時>
 python3 analysis/checks/check_recording.py $R/A/*.csv --report $R/check_A_recording.md
 python3 analysis/checks/check_recording.py $R/A/*stress_heavy_push.csv --c 30000 --phi 45 --rho 1950
 
@@ -70,7 +72,7 @@ while true; do echo "$(date +%T)  接続数: $(awk '$2 ~ /:2710$/ && $4 == "01"'
 | B | 15 件すべて想定どおり（error になるべき 9 件は error、残り 6 件は ok）。error の直後のエピソードもすべて ok。開始位置のばらつき 0.09 cm |
 | C | 10 件すべて ok。AGX から読み戻した土質と要求の不一致 0 件 |
 
-### 段階D：読み込み直しの耐久試験（最終版）
+### 段階D：読み込み直しの耐久試験（不具合 1〜10 を直した後）
 | 項目 | 最初 | 最後 |
 | --- | --- | --- |
 | 結果 | — | 50 件すべて ok |

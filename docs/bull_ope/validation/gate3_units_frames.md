@@ -3,10 +3,12 @@
 
 | 項目 | 内容 |
 | --- | --- |
-| 実行日 | 2026/10/18 |
-| Unity 側のコミット | f6d7143b7645c8960ae5b8f8ff046186843241b2（`ground_behind` を追加） |
-| bull_ope 側のコミット | 0d79c94431aede02fed3c45953d4175f391e413a（`LIFT_KP` = 3.0、`check_units.py`、`inspect_depth.py`） |
-| 結果のフォルダ | 正式な結果：`data/validation/gate3/run_20261018_145751_gate3/`、制御のゲインの試験：`data/validation/gate3/kp3/`、力の内訳の試験：`data/validation/gate3/forces/` |
+| 前提 | 関門2（関門2のデータを最初の点検に使う） |
+| 使うエピソード | `val_*`、`ex_back_blading`、`ex_turning` |
+| 主な道具 | `check_units.py`、`inspect_depth.py`、`check_gate2.py`、Unity の DebugRenderManager |
+| 結果の保存先 | `data/validation/gate3/`（正式な結果 `run_<日時>_gate3/`、制御のゲインの試験 `kp3/`、力の内訳の試験 `forces/`） |
+| この関門で変えたもの | Unity：`BladeStatePublisher` に `ground_behind` を追加。bull_ope：`LIFT_KP` を 1.0 → 3.0 |
+| 検証した環境 | Unity 2022.3.16f1、AGX Dynamics 2.37.3.0（AGXUnity 5.0.1）、ROS2 Humble |
 
 
 ## 1. 目的
@@ -33,9 +35,9 @@
 
 ```
 cd /workspaces/ws-bulldozer/src/bull_ope
-G=data/validation/gate2/run_20261018_132744_gate2
+G=data/validation/gate2/run_<日時>_gate2
 python3 analysis/checks/check_units.py $G --report $G/check_units.md
-python3 analysis/checks/inspect_depth.py $G/ep0000_val_constant_depth.csv $G/ep0006_val_depth_step.csv $G/ep0002_val_static.csv --plot
+python3 analysis/checks/inspect_depth.py $G/ep*_val_constant_depth.csv $G/ep*_val_depth_step.csv $G/ep*_val_static.csv --plot
 ```
 
 ### 2.2 わかったことを受けて試す・調べる
@@ -55,7 +57,7 @@ python3 src/bull_ope/analysis/checks/check_units.py src/bull_ope/data/validation
 (c) 後退中に排土板が土に当たっているかを、記録で調べた。後退中、刃先から 0.5 m 前方（`ground_ahead`）などは、排土板が少し前に通った場所なので、そこが削られているかを見る。
 
 ```
-python3 - data/validation/gate3/forces/20261018_141001_ex_back_blading.csv <<'PY'
+python3 - data/validation/gate3/forces/*_ex_back_blading.csv <<'PY'
 import sys
 import numpy as np
 import pandas as pd
@@ -82,7 +84,7 @@ cd /workspaces/ws-bulldozer
 ros2 run bull_ope collect_data --episodes val_static val_air_run val_constant_depth val_depth_step \
     --num 3 --seed 0 --run-name gate3 --out src/bull_ope/data/validation/gate3
 cd src/bull_ope
-G3=data/validation/gate3/run_20261018_145751_gate3
+G3=data/validation/gate3/run_<日時>_gate3
 python3 analysis/checks/check_gate2.py $G3 --report $G3/check_gate2.md
 python3 analysis/checks/check_units.py $G3 --report $G3/check_units.md
 python3 analysis/checks/inspect_depth.py $G3/ep*_val_constant_depth.csv $G3/ep*_val_depth_step.csv --plot

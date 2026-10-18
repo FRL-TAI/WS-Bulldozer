@@ -3,10 +3,12 @@
 
 | 項目 | 内容 |
 | --- | --- |
-| 実行日 | 2026/10/18 |
-| Unity 側のコミット | f6d7143b7645c8960ae5b8f8ff046186843241b2 |
-| bull_ope 側のコミット | 9d8ff4fc3b5edb51068bc6d828f53961d1ac859c（`check_timing.py` を追加） |
-| 結果のフォルダ | 関門3の正式な結果：`data/validation/gate3/run_20261018_145751_gate3/`、走り出しと止まりの繰り返し：`data/validation/gate4/run_20261018_151706_gate4/` |
+| 前提 | 関門3（関門3の正式な結果を使う） |
+| 使うエピソード | `val_*`（関門3のデータ）、`ex_stop_and_go` |
+| 主な道具 | `check_timing.py`、`check_gate2.py` |
+| 結果の保存先 | `data/validation/gate4/run_<日時>_gate4/` |
+| 所要時間の目安 | 約 5 分 |
+| 検証した環境 | Unity 2022.3.16f1、AGX Dynamics 2.37.3.0（AGXUnity 5.0.1）、ROS2 Humble |
 
 
 ## 1. 目的
@@ -32,14 +34,14 @@ T5 が、時刻の列を持たない `joint_states` のずれを測る方法。�
 
 ```
 cd /workspaces/ws-bulldozer/src/bull_ope
-G3=data/validation/gate3/run_20261018_145751_gate3
+G3=data/validation/gate3/run_<日時>_gate3
 python3 analysis/checks/check_timing.py $G3 --report $G3/check_timing.md
 
 cd /workspaces/ws-bulldozer
 ros2 run bull_ope collect_data --episodes ex_stop_and_go --num 3 --seed 0 \
     --run-name gate4 --out src/bull_ope/data/validation/gate4
 cd src/bull_ope
-G4=data/validation/gate4/run_20261018_151706_gate4
+G4=data/validation/gate4/run_<日時>_gate4
 python3 analysis/checks/check_gate2.py $G4 --report $G4/check_gate2.md
 python3 analysis/checks/check_timing.py $G4 --report $G4/check_timing.md
 ```

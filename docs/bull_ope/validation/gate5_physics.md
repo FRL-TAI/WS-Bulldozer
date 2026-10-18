@@ -3,11 +3,13 @@
 
 | 項目 | 内容 |
 | --- | --- |
-| 実行日 | 2026/10/18 |
-| Unity 側のコミット | f6d7143b7645c8960ae5b8f8ff046186843241b2 |
-| bull_ope 側のコミット | e230b8a474994adf6b9d3087290c3302587e3d18（`val_constant_depth_3cm`・`9cm`・`12cm`、`check_physics.py` を追加） |
-| 結果のフォルダ | 深さを変えたデータ：`data/validation/gate5/run_<日時>_gate5/`（日時は要記入）、参考：関門3の正式な結果 |
+| 前提 | 関門3・4 |
+| 使うエピソード | `val_constant_depth`、`val_constant_depth_3cm`・`9cm`・`12cm`、`val_air_run`（関門3のデータ） |
+| 主な道具 | `check_physics.py`、`check_gate2.py` |
 | 土質 | dirt_1（c = 2,100 Pa、φ = 39.98°、ρ = 1,474 kg/m³、膨張率 1.28） |
+| 結果の保存先 | `data/validation/gate5/run_<日時>_gate5/` |
+| 所要時間の目安 | 約 10 分 |
+| 検証した環境 | Unity 2022.3.16f1、AGX Dynamics 2.37.3.0（AGXUnity 5.0.1）、ROS2 Humble |
 
 
 ## 1. 目的
@@ -32,7 +34,7 @@ AGX の反力が、土の力学の式（FEE：基本土工方程式）や力の�
 ```
 cd /workspaces/ws-bulldozer/src/bull_ope
 # (a) 関門3のデータで試す
-G3=data/validation/gate3/run_20261018_145751_gate3
+G3=data/validation/gate3/run_<日時>_gate3
 python3 analysis/checks/check_physics.py $G3 --report $G3/check_physics.md --plot $G3/check_physics.png
 
 # (b) 深さ 3・6・9・12 cm を 2 回ずつ記録して点検
@@ -41,7 +43,7 @@ ros2 run bull_ope collect_data \
     --episodes val_constant_depth_3cm val_constant_depth val_constant_depth_9cm val_constant_depth_12cm \
     --num 2 --seed 0 --run-name gate5 --out src/bull_ope/data/validation/gate5
 cd src/bull_ope
-G5=data/validation/gate5/run_<日時>_gate5
+G5=data/validation/gate5/run_<日時>_gate5     # 実際のフォルダ名に置き換える
 python3 analysis/checks/check_gate2.py $G5 --report $G5/check_gate2.md
 python3 analysis/checks/check_physics.py $G5 --report $G5/check_physics.md --plot $G5/check_physics.png
 ```

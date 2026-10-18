@@ -3,10 +3,12 @@
 
 | 項目 | 内容 |
 | --- | --- |
-| 実行日 | 2026/10/18 |
-| Unity 側のコミット | b2e83dd8d4fc064083176bf0eb1c14ef07d3e88d |
-| bull_ope 側のコミット | e63849ec99ed5b4bc0916427f3b15ffd5f48936e |
-| 結果のフォルダ | `data/validation/gate2/run_20261018_132744_gate2/`（目で見た確認は `data/validation/gate2/visual/`） |
+| 前提 | 関門1 |
+| 使うエピソード | `val_static`、`val_air_run`、`val_constant_depth`、`val_depth_step` |
+| 主な道具 | `check_collection.py`、`check_recording.py`、`check_gate2.py` |
+| 結果の保存先 | `data/validation/gate2/run_<日時>_gate2/`（目で見た確認は `data/validation/gate2/visual/`） |
+| 所要時間の目安 | 約 10 分 |
+| 検証した環境 | Unity 2022.3.16f1、AGX Dynamics 2.37.3.0（AGXUnity 5.0.1）、ROS2 Humble |
 
 
 ## 1. 目的
@@ -40,7 +42,7 @@ ros2 run bull_ope collect_data --episodes val_static val_air_run val_constant_de
 
 # 点検
 cd src/bull_ope
-G=data/validation/gate2/run_20261018_132744_gate2
+G=data/validation/gate2/run_<日時>_gate2
 python3 analysis/checks/check_collection.py $G --report $G/check_collection.md
 python3 analysis/checks/check_recording.py $G/ep[0-9]*.csv --report $G/check_recording.md
 python3 analysis/checks/check_gate2.py $G --report $G/check_gate2.md

@@ -3,10 +3,12 @@
 
 | 項目 | 内容 |
 | --- | --- |
-| 実行日 | 2026/10/18 |
-| Unity 側のコミット | f6d7143b7645c8960ae5b8f8ff046186843241b2 |
-| bull_ope 側のコミット | afe6dde50057dc7e3b0104e6a5d795aac21c62ee（`val_sens_*`、`check_sensitivity.py` を追加） |
-| 結果のフォルダ | 基準 × 5：`data/validation/gate6/run_20261018_162031_gate6_base/`、条件を変えたもの × 2：`run_20261018_162636_gate6_vary/`、φ の追加 × 3：`run_20261018_164400_gate6_phi/`、まとめ：`data/validation/gate6/check_sensitivity.md`・`.png` |
+| 前提 | 関門5 |
+| 使うエピソード | `val_sens_*`（12 条件） |
+| 主な道具 | `check_sensitivity.py`、`check_gate2.py`、`check_collection.py` |
+| 結果の保存先 | `data/validation/gate6/`（`run_<日時>_gate6_base/`、`run_<日時>_gate6_vary/`、`run_<日時>_gate6_phi/`、まとめの `check_sensitivity.md`・`.png`） |
+| 所要時間の目安 | 約 25 分 |
+| 検証した環境 | Unity 2022.3.16f1、AGX Dynamics 2.37.3.0（AGXUnity 5.0.1）、ROS2 Humble |
 
 
 ## 1. 目的
@@ -51,7 +53,7 @@ ros2 run bull_ope collect_data --episodes val_sens_phi25 val_sens_phi50 --num 3 
 
 cd src/bull_ope
 D=data/validation/gate6
-GB=$D/run_20261018_162031_gate6_base; GV=$D/run_20261018_162636_gate6_vary; GP=$D/run_20261018_164400_gate6_phi
+GB=$D/run_<日時>_gate6_base; GV=$D/run_<日時>_gate6_vary; GP=$D/run_<日時>_gate6_phi
 for d in $GB $GV $GP; do
   python3 analysis/checks/check_gate2.py $d --report $d/check_gate2.md
   python3 analysis/checks/check_collection.py $d | grep -A2 "ラベル"
