@@ -38,6 +38,10 @@ run_one() {   # $1 エピソード名、$2 件数、$3 seed、$4 区切りの名
   [ "$2" -gt 0 ] || return 0
   ros2 run bull_ope collect_data --episodes "$1" --num "$2" --seed "$3" \
       --run-name "$4" --out "$OUT" 2>&1 | tee -a "$OUT/$4.log"
+  if [ "${PIPESTATUS[0]}" -ne 0 ]; then
+    echo "===== $(date '+%F %T') $4 の収集が失敗したので止めます（Unity と ROS-TCP-Endpoint を確認してください）" | tee -a "$LOG"
+    exit 1
+  fi
   local d
   d=$(ls -dt "$OUT"/run_*_"$4" | head -1)
   python3 "$CHECKS/check_collection.py" "$d" --report "$d/check_collection.md" > /dev/null

@@ -15,6 +15,7 @@ import argparse
 import csv
 import json
 import os
+import sys
 import threading
 import time
 import traceback
@@ -80,6 +81,8 @@ def main():
     ap.add_argument("--sampling", choices=["uniform", "lhs"], default="lhs", help="土質パラメータの決め方")
     ap.add_argument("--out", default=C.DATA_DIR)
     ap.add_argument("--run-name", default="")
+    ap.add_argument("--max-consecutive-errors", type=int, default=3,
+                    help="エラーがこの回数続いたら収集を止める（Unity が止まったときに時間を無駄にしないため）。0 で止めない")
     a = ap.parse_args()
 
     if a.list:
@@ -107,6 +110,8 @@ def main():
 
     jsonl_path = os.path.join(run_dir, "episodes.jsonl")
     records = []
+    consecutive_errors = 0
+    aborted = False
     try:
         iface.wait_ready()
         t_start = time.monotonic()
@@ -117,6 +122,7 @@ def main():
             try:
                 summary = runner.run(ep, i, len(plan), csv_path=os.path.join(run_dir, fname))
                 row.update(summary, status="ok")
+                consecutive_errors = 0
             except SkipEpisode as e:
                 log.warn(f"スキップ: {e}")
                 row.update(status=f"skipped: {e}")
@@ -124,6 +130,7 @@ def main():
                 log.error(f"失敗: {e}\n{traceback.format_exc()}")
                 row.update(status=f"error: {e}")
                 iface.stop_all()
+                consecutive_errors += 1
             records.append(row)
             try:
                 line = json.dumps(to_jsonable(row), ensure_ascii=False, allow_nan=False)
@@ -140,12 +147,18 @@ def main():
                 f.write(line + "\n")
             elapsed = time.monotonic() - t_start
             log.info(f"経過 {elapsed / 60:.1f} 分、残り約 {elapsed / (i + 1) * (len(plan) - i - 1) / 60:.1f} 分")
+            if a.max_consecutive_errors and consecutive_errors >= a.max_consecutive_errors:
+                log.error(f"エラーが {consecutive_errors} 回続いたので収集を止めます（Unity が止まっていないか確認してください）")
+                aborted = True
+                break
     finally:
         write_table(os.path.join(run_dir, "episodes.csv"), records)
         iface.stop_all()
         iface.set_phase("finished")
         rclpy.shutdown()
     print(f"保存先: {run_dir}")
+    if aborted:
+        sys.exit(2)
 
 
 if __name__ == "__main__":
