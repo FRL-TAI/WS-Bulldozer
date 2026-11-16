@@ -11,5 +11,5 @@ __pycache__/
 *.pyc
 
 # bull_ope
-src/bull_ope/data/*
-!src/bull_ope/data/.gitkeep
+data/*
+!data/.gitkeep
