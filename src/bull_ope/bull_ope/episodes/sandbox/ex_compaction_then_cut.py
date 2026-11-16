@@ -28,6 +28,7 @@ class CompactionThenCut(Episode):
     name = "ex_compaction_then_cut"
     description = "【実験B2】履帯で往復して踏み固めた後（奇数のシードは踏み固めなし）、同じ経路を一定の深さで削る"
     SOIL_RANGES = {k: (v, v) for k, v in SOIL.items()}
+    RECORD_COMPACTION = True
 
     PASS_LENGTH = 5.0       # 踏み固める区間の長さ [m]（機体の移動距離）
     ROUND_TRIPS = 2         # 踏み固めありのときの往復の回数（走路の上を通る回数は 2 倍。実験A では 4 回で約 95%）

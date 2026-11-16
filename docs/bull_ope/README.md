@@ -237,7 +237,7 @@ N_CUT=0 N_PW=0 N_PILE=30 OUT=data/production_pile \
 出力のフォルダの構成と `episodes.jsonl` の列は [output_data.md](output_data.md) を参照。
 
 ### 3.3 締固めの記録（*_compaction.csv）
-クラス属性 `RECORD_COMPACTION` が True のエピソード（現在は `ex_compaction_bands`）では、Unity の `CompactionProbe` が、地形のマスの高さと締固めの程度を `/sim/compaction_probe` に送る。`bull_ope` の `CompactionRecorder`（`recording/compaction_recorder.py`）がそれを受け取り、時系列データの CSV の隣に `<時系列データの名前>_compaction.csv` として保存する。
+クラス属性 `RECORD_COMPACTION` が True のエピソード（現在は `ex_compaction_passes`・`ex_compaction_bands`・`ex_compaction_then_cut`・`ex_compaction_patterns`・`ex_compaction_levels`）では、Unity の `CompactionProbe` が、地形のマスの高さと締固めの程度を `/sim/compaction_probe` に送る。`bull_ope` の `CompactionRecorder`（`recording/compaction_recorder.py`）がそれを受け取り、時系列データの CSV の隣に `<時系列データの名前>_compaction.csv` として保存する。
 
 | 項目 | 内容 |
 | --- | --- |

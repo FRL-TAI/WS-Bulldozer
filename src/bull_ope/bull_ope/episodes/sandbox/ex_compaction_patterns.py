@@ -49,6 +49,7 @@ class _CompactionBandsBase(Episode):
     """地山 → A → 地山 → B → 地山 の帯を一定の深さで削るエピソードの共通部分（name が空なので一覧には出ない）"""
     SOIL_RANGES = {k: (v, v) for k, v in SOIL.items()}
     REQUIRES_GRID_CONTROL = True
+    RECORD_COMPACTION = True
 
     BAND_START = 1.0        # 最初の帯の始まり [m]（刃先の開始位置から）
     BAND_LENGTH = 2.0       # 帯の長さ [m]

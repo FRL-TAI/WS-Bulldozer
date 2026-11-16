@@ -17,6 +17,7 @@ class CompactionPasses(Episode):
     name = "ex_compaction_passes"
     description = "【締固め】排土板を上げたまま 8 m の区間を往復し、履帯で地面を踏み固める"
     SOIL_RANGES = {k: (v, v) for k, v in SOIL.items()}   # 下限 = 上限 にして土質を固定
+    RECORD_COMPACTION = True
 
     LENGTH = 8.0          # 区間の長さ [m]
     ROUND_TRIPS = 4       # 往復の回数（走路の上を通る回数は 2 倍）
