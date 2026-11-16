@@ -42,7 +42,7 @@ python3 analysis/<フォルダ>/<スクリプト> --help
 
 
 ## phase0/：フェーズ0（締固め・沈下・較正曲線）
-締固めを、履帯で踏んだときの追加の沈下（地形の経路）から推定できるかを調べた。結論と経緯は notes の `docs/phase0.md`。入力は `test_episode` の CSV と、締固めの記録（`*_compaction.csv`、[docs/bull_ope/README.md の 3.3](../docs/bull_ope/README.md#33-締固めの記録_compactioncsv)）。データは `data/compaction/` に置いている。
+締固めを、履帯で踏んだときの追加の沈下（地形の経路）から推定できるかを調べた。結論と経緯は notes の `docs/phase0.md`。入力は `test_episode` の CSV と、締固めの記録（`*_compaction.csv`、[docs/bull_ope/README.md の 3.3](../docs/bull_ope/README.md#33-締固めの記録_compactioncsv)）。記録は `data/phase0/` にまとめ、どの記録を図・表に使うかを `data/phase0/MANIFEST.md` に書いている（2026-11-17 に全実験を取り直した。計画は `RECOLLECT_PLAN.md`）。
 
 | スクリプト | 用途 | 実験 |
 | --- | --- | --- |
@@ -50,21 +50,15 @@ python3 analysis/<フォルダ>/<スクリプト> --help
 | `check_cut_bands.py` | 締固めの程度ごとの帯で切削抵抗を比べる（力の経路。締固めの推定には使わないと結論した） | 実験B1〜B3（`ex_compaction_bands`、`ex_compaction_then_cut`、`ex_compaction_patterns`、`ex_compaction_levels`） |
 | `check_track_settlement.py` | 削った後の地面を履帯が踏んだときの追加の沈下と、その地面の締固めの程度の関係を調べる。`--out` でマスごとの値（`cells.csv`）を保存する | 実験B1・B3 の締固めの記録 |
 | `calibrate_settlement.py` | `cells.csv` から、追加の沈下 → 締固めの程度の較正曲線を作り、記録ごとの交差検証で精度を評価する | 同上（関門0） |
-| `plot_figures.py` | notes の `docs/phase0.md` の図1〜11 を描く。上の4本の関数と出力（`data/compaction/`・`data/hardening/` の表）を使い、記録や数値は変えない。図8 は記録が残っていないため描かない | フェーズ0 の全実験 |
+| `run_phase0.sh` | フェーズ0 の全実験（50 エピソード）を `test_episode` で順に記録する。出力は `data/phase0/<実験名>/`、成否は `data/phase0/run_log.txt` | フェーズ0 の全実験 |
+| `plot_figures.py` | `data/phase0/MANIFEST.md` の記録に上の4本を実行し、notes の `docs/phase0.md` の図1〜11 と本文の値の表（`data/phase0/figure_values.csv`）を作る | フェーズ0 の全実験 |
 
-実行例（フェーズ0 の較正曲線）：
-
-```
-python3 analysis/phase0/check_track_settlement.py \
-    data/compaction/compaction_*_ex_compaction_{bands,patterns,levels}.csv \
-    --out data/compaction/settlement --plot
-python3 analysis/phase0/calibrate_settlement.py data/compaction/settlement/cells.csv \
-    --seg 0.5 1 2 --out data/compaction/calibration --plot
-```
-
-フェーズ0 の図（numpy・matplotlib が必要なのでコンテナの中で実行する。出力は `data/figures/phase0/`。notes の `docs/figures/phase0/` にコピーして使う）：
+フェーズ0 の記録と図（コンテナの中で `install/setup.bash` を source して実行する。図は `data/phase0/figures/`。notes の `docs/figures/phase0/` にコピーして使う）：
 
 ```
-python3 analysis/phase0/plot_figures.py              # 全図
-python3 analysis/phase0/plot_figures.py --only 6 7   # 図を選ぶ
+bash analysis/phase0/run_phase0.sh                           # 全実験を記録（Unity の Play が必要）
+python3 analysis/phase0/plot_figures.py                      # 解析 → 図1〜11 → figure_values.csv
+python3 analysis/phase0/plot_figures.py --skip-analysis --only 6 7   # 解析の出力を使い回して図を選ぶ
 ```
+
+各スクリプトを個別に実行するときのコマンドは `RECOLLECT_PLAN.md` の 4 にある。

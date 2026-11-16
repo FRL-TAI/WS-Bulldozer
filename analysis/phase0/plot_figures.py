@@ -1,28 +1,33 @@
 """
-フェーズ0 の報告（notes の docs/phase0.md）の図1〜11 を描く。
+フェーズ0 の報告（notes の docs/phase0.md）の図1〜11 と、本文の値の表（figure_values.csv）を作る。
 
-既存の解析スクリプトの関数と、それらが --out で保存した表を使う（記録や数値は変えない）。
-  実験A（図2〜4）   ：締固めの記録 compaction_*_ex_compaction_passes.csv を check_compaction.py の関数で集計
-  実験B（図5・6下）  ：check_cut_bands.py の出力（effects.csv、compare.csv）
-  較正（図6上・7）   ：calibrate_settlement.py の出力（curve.csv、cv.csv）
-  硬化（図9〜11）    ：check_cut_bands.py の出力（bands.csv）と check_track_settlement.py の出力（by_level.csv、fit.csv）
-  図1               ：エピソードの定数（ex_compaction_bands / patterns / levels）から描く模式図
+入力は data/phase0/ の記録だけ。どの記録を使うかは data/phase0/MANIFEST.md の表で決める（「使う」が ○ の行）。
+1回の実行で、次の順に処理する：
+  1. 解析：既存の4本（check_cut_bands.py・check_track_settlement.py・calibrate_settlement.py。
+     check_compaction.py は関数を import）を、MANIFEST の記録に対して実行する。出力は data/phase0/analysis/
+       cut_levels       B1_bands + B3_levels の時系列       → 図6(b)、§3.3 の表の切削抵抗の比
+       cut_patterns     B3_patterns の時系列               → 図5
+       cut_then_cut     B2_then_cut の時系列               → 図5（B2）
+       settlement       B1_bands + B3_levels の締固めの記録 → calibration（--seg 0.5 1）→ 図6(a)・図7
+       settlement_then_cut  B2_then_cut の締固めの記録     → 図8
+       hardening_<条件>/{cut_bands,settlement}            → 図9〜11
+  2. 図：実験A（図2〜4）は締固めの記録を check_compaction.py の関数で集計し、ほかは 1 の出力を読む。
+     図1 はエピソードの定数から描く模式図。図8 は B2 の締固めの記録と較正曲線（calibrate_settlement.py の関数）から描く。
+  3. 本文の値の表 figure_values.csv（図・項目・値）と、追加の確認（図5 の基準の帯、図11 の刃先の層の w）。
 
-図の中の文字は英語。各図で使った値（本文と照合するための値）を標準出力に表示する。
+図の中の文字は英語。各図で使った値を標準出力にも表示する。
 
-使い方（numpy と matplotlib が必要なので、コンテナの中で実行する）：
-  python3 analysis/phase0/plot_figures.py                 # 全図
-  python3 analysis/phase0/plot_figures.py --only 6 7      # 図を選ぶ
-  python3 analysis/phase0/plot_figures.py --out DIR       # 出力先（既定 data/figures/phase0）
-
-図8（自然に踏み固めた地面の逆算値）は、使う記録（ex_compaction_then_cut の締固めの記録）が
-残っていないため描かない（実行すると理由を表示する）。
+使い方（numpy・matplotlib と bull_ope が必要なので、コンテナの中で install/setup.bash を source して実行する）：
+  python3 analysis/phase0/plot_figures.py                 # 解析 → 全図 → figure_values.csv
+  python3 analysis/phase0/plot_figures.py --skip-analysis --only 6 7   # 解析の出力を使い回して図を選ぶ
+  出力：data/phase0/figures/（--out で変更）、data/phase0/figure_values.csv
 """
 import argparse
 import csv
 import math
 import os
 import statistics
+import subprocess
 import sys
 from collections import defaultdict
 
@@ -34,6 +39,8 @@ from matplotlib.patches import Rectangle
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import check_compaction as cc  # noqa: E402
+import check_track_settlement as cts  # noqa: E402
+import calibrate_settlement as cs  # noqa: E402
 
 WS = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 
@@ -53,12 +60,75 @@ plt.rcParams.update({
     "axes.facecolor": "white", "savefig.facecolor": "white",
 })
 
-# 実験A の記録（関門の判断に使った2回。1本目 045543 は通過を判定できず、051320 は履帯ごとに1列だけの記録）
-EXP_A_FILES = ["compaction_20261111_060234_ex_compaction_passes.csv",
-               "compaction_20261111_060815_ex_compaction_passes.csv"]
+HERE = os.path.dirname(os.path.abspath(__file__))
 HARDENING = [("baseline", "Default (KE 1, NE 0.0833)", C1),
              ("NE1", "NE 1.0", C2),
              ("KE0", "KE 0 (no hardening)", C3)]
+
+
+# ---------------------------------------------------------------- MANIFEST と解析
+def read_manifest(d):
+    """MANIFEST.md の記録の表を読む。列：記録 | 実験 | エピソード | seed | KE | NE | 使う | 図・表"""
+    rows, head = [], None
+    with open(os.path.join(d, "MANIFEST.md"), encoding="utf-8") as f:
+        for line in f:
+            if not line.startswith("|"):
+                head = None if not line.strip() else head
+                continue
+            cells = [c.strip().strip("`") for c in line.strip().strip("|").split("|")]
+            if cells[0] == "記録":
+                head = cells
+            elif head and not set(cells[0]) <= set("-: "):
+                rows.append(dict(zip(head, cells)))
+    if not rows:
+        raise SystemExit("MANIFEST.md に記録の表がありません")
+    return rows
+
+
+def records(exp, compaction=False):
+    """MANIFEST で「使う」が ○ の、実験 exp の記録のパス（compaction=True なら締固めの記録）"""
+    out = []
+    for r in MANIFEST:
+        if r["実験"] == exp and r["使う"].startswith("○"):
+            p = os.path.join(OPTS.data, r["記録"])
+            out.append(p[:-4] + "_compaction.csv" if compaction else p)
+    if not out:
+        raise SystemExit(f"MANIFEST に実験 {exp} の使う記録がありません")
+    return out
+
+
+HARDENING_SETS = {"baseline": "hardening_baseline", "NE1": "hardening_NE1", "KE0": "hardening_KE0"}
+
+
+def A(*parts):
+    """解析の出力のパス（data/phase0/analysis/...）"""
+    return os.path.join(OPTS.data, "analysis", *parts)
+
+
+def run_analysis():
+    def sh(script, args, log):
+        cmd = [sys.executable, os.path.join(HERE, script)] + args
+        os.makedirs(os.path.dirname(log), exist_ok=True)
+        print("  $ " + " ".join(os.path.relpath(c, WS) if c.startswith(WS) else c for c in cmd))
+        with open(log, "w", encoding="utf-8") as f:
+            r = subprocess.run(cmd, stdout=f, stderr=subprocess.STDOUT, cwd=WS)
+        if r.returncode:
+            raise SystemExit(f"{script} が失敗しました（{log}）")
+    levels = records("B1_bands") + records("B3_levels")
+    levels_c = records("B1_bands", True) + records("B3_levels", True)
+    sh("check_cut_bands.py", levels + ["--out", A("cut_levels")], A("cut_levels.log"))
+    sh("check_cut_bands.py", records("B3_patterns") + ["--out", A("cut_patterns")], A("cut_patterns.log"))
+    sh("check_cut_bands.py", records("B2_then_cut") + ["--out", A("cut_then_cut")], A("cut_then_cut.log"))
+    sh("check_track_settlement.py", levels_c + ["--out", A("settlement")], A("settlement.log"))
+    sh("calibrate_settlement.py", [A("settlement", "cells.csv"), "--seg", "0.5", "1", "--out", A("calibration")],
+       A("calibration.log"))
+    sh("check_track_settlement.py", records("B2_then_cut", True) + ["--out", A("settlement_then_cut")],
+       A("settlement_then_cut.log"))
+    for cond, exp in HARDENING_SETS.items():
+        sh("check_cut_bands.py", records(exp) + ["--out", A(f"hardening_{cond}", "cut_bands")],
+           A(f"hardening_{cond}", "cut_bands.log"))
+        sh("check_track_settlement.py", records(exp, True) + ["--out", A(f"hardening_{cond}", "settlement")],
+           A(f"hardening_{cond}", "settlement.log"))
 
 
 def read_csv(path):
@@ -87,6 +157,10 @@ def note(ax, text, loc="upper right"):
 
 
 # ---------------------------------------------------------------- 実験A の集計（check_compaction.py の関数）
+COL_DEPTH = 0.8   # 深さ方向の平均を取る範囲 [m]（§3.1 の「0.8 m までの平均」）
+DH_SCALE = 1.07   # 沈下量から深さ方向の平均を求めるときの沈下の倍率（check_compaction.py の --dh-scale。図4 の比 約 1.07）
+
+
 def exp_a(path, x0=0.5, x1=7.5):
     """通過ごとの地表の締固めの程度・沈下（列ごと）、深さ方向の分布（履帯）、マスごとの予測沈下と実測沈下"""
     rows_all = cc.load(path)
@@ -113,6 +187,19 @@ def exp_a(path, x0=0.5, x1=7.5):
         depth.append([float(np.nanmean([cc.to_float(r[c]) for r in g])) for c in cols])
 
     first = {r["_cell"]: r for r in tb[t_first]}
+    colavg = []   # 通過の終わりごとの、履帯のマスの深さ COL_DEPTH までの平均の締固めの程度（質量で重み付け）
+    for t in ends:
+        v = [cc.column_average(r, first[r["_cell"]], cols, 0.3125, 0.0, COL_DEPTH)[1] for r in tb[t]
+             if r["_group"] in ("track_L", "track_R") and r["_cell"] in first]
+        colavg.append(float(np.nanmean(v)))
+    est_err = []  # 最後の記録で、沈下量だけから求めた深さ方向の平均 − 真値（check_compaction.py の 5a と同じ式、--dh-scale DH_SCALE）
+    for r in tb[times[-1]]:
+        r0 = first.get(r["_cell"])
+        if r["_group"] not in ("track_L", "track_R") or r0 is None:
+            continue
+        _, c_true, M, T_old = cc.column_average(r, r0, cols, 0.3125, 0.0, COL_DEPTH)
+        if math.isfinite(c_true):
+            est_err.append(M / (T_old + DH_SCALE * (r["_h"] - r0["_h"])) - c_true)
     last = {r["_cell"]: r for r in tb[times[-1]]}
     pred, meas = [], []
     for key, r in last.items():
@@ -122,7 +209,18 @@ def exp_a(path, x0=0.5, x1=7.5):
         if math.isfinite(p):
             pred.append(p * 1000.0)
             meas.append((r["_h"] - first[key]["_h"]) * 1000.0)
-    return {"surf": surf, "depth": depth, "pred": np.array(pred), "meas": np.array(meas), "n_passes": len(passes)}
+    return {"surf": surf, "depth": depth, "pred": np.array(pred), "meas": np.array(meas), "n_passes": len(passes),
+            "colavg": colavg, "col_rmse": float(np.sqrt(np.mean(np.square(est_err)))) if est_err else math.nan}
+
+
+_EXP_A = {}
+
+
+def exp_a_runs():
+    if not _EXP_A:
+        for p in records("A_passes", True):
+            _EXP_A[os.path.basename(p)] = exp_a(p)
+    return list(_EXP_A.items())
 
 
 # ---------------------------------------------------------------- 図1
@@ -203,7 +301,7 @@ def fig01(d, out):
 
 # ---------------------------------------------------------------- 図2
 def fig02(d, out):
-    runs = [exp_a(os.path.join(d, "compaction", f)) for f in EXP_A_FILES]
+    runs = [r for _, r in exp_a_runs()]
     n = runs[0]["n_passes"]
     passes = np.arange(n + 1)
     fig, axs = plt.subplots(1, 2, figsize=(8.2, 3.4))
@@ -218,14 +316,21 @@ def fig02(d, out):
             ax.plot(passes, y.mean(0), marker=mk, ls=ls, color=col, label=label,
                     mfc="white" if mk == "s" else col, ms=6 if mk == "s" else 5)
         vals[k] = (c.mean(0), dh.mean(0), c, dh)
+    ca = np.array([r["colavg"] for r in runs])
+    axs[0].fill_between(passes, ca.min(0), ca.max(0), color=C1, alpha=0.12, lw=0)
+    axs[0].plot(passes, ca.mean(0), marker="^", ls=":", color=C1, mfc="white",
+                label=f"Under tracks, mean to {COL_DEPTH:.1f} m depth")
     tc, tdh, call, _ = vals["track"]
     frac1 = (tc[1] - tc[0]) / (tc[-1] - tc[0])
-    axs[0].set(xlabel="Pass number [-]", ylabel="Surface degree of compaction [-]",
-               title="(a) Surface degree of compaction")
+    cm = ca.mean(0)
+    frac1_col = (cm[1] - cm[0]) / (cm[-1] - cm[0])
+    axs[0].set(xlabel="Pass number [-]", ylabel="Degree of compaction [-]",
+               title="(a) Degree of compaction (surface and depth mean)")
     axs[1].set(xlabel="Pass number [-]", ylabel="Settlement [mm]", title="(b) Settlement (downward positive)")
     for ax in axs:
         ax.set_xticks(passes)
-    axs[0].text(0.97, 0.55, f"Pass 1 reaches {frac1 * 100:.0f}% of final\nfinal {tc[-1]:.3f}",
+    axs[0].text(0.97, 0.55, f"Pass 1 reaches {frac1 * 100:.0f}% of final (surface),\n"
+                f"{frac1_col * 100:.0f}% (depth mean); final {tc[-1]:.3f}",
                 transform=axs[0].transAxes, ha="right", va="center", fontsize=8, color=INK2)
     axs[1].text(0.97, 0.55, f"final {tdh[-1]:.1f} mm", transform=axs[1].transAxes,
                 ha="right", va="center", fontsize=8, color=INK2)
@@ -236,7 +341,12 @@ def fig02(d, out):
     save(fig, out, "fig02_passes.png")
     run_diff_c = abs(call[0, -1] - call[1, -1])
     run_diff_dh = abs(vals["track"][3][0, -1] - vals["track"][3][1, -1])
-    return {"pass1 fraction (surface)": f"{frac1 * 100:.1f}%", "final surface c": f"{tc[-1]:.4f}",
+    return {"pass1 fraction (surface)": f"{frac1 * 100:.1f}%",
+            "pass1 fraction (depth mean)": f"{frac1_col * 100:.1f}%",
+            "final depth-mean c": f"{cm[-1]:.4f}",
+            "depth-mean c from settlement RMSE": f"{max(r['col_rmse'] for r in runs):.4f}",
+            "depth-mean change at end": f"{cm[-1] - cm[0]:.4f}",
+            "final surface c": f"{tc[-1]:.4f}",
             "final settlement mm": f"{tdh[-1]:.1f}", "run diff c": f"{run_diff_c:.4f}",
             "run diff settlement mm": f"{run_diff_dh:.2f}",
             "center/control max |dc|": f"{max(abs(vals[k][2] - 1).max() for k in ('center', 'control')):.4f}"}
@@ -244,7 +354,7 @@ def fig02(d, out):
 
 # ---------------------------------------------------------------- 図3
 def fig03(d, out):
-    runs = [exp_a(os.path.join(d, "compaction", f)) for f in EXP_A_FILES]
+    runs = [r for _, r in exp_a_runs()]
     prof = np.mean([np.array(r["depth"]) for r in runs], axis=0)   # (通過, 層)
     n_layer = prof.shape[1]
     layers = np.arange(n_layer)
@@ -268,14 +378,13 @@ def fig03(d, out):
 
 # ---------------------------------------------------------------- 図4
 def fig04(d, out):
-    runs = [exp_a(os.path.join(d, "compaction", f)) for f in EXP_A_FILES]
     fig, ax = plt.subplots(figsize=(4.4, 4.2))
     res = {}
-    for r, f, col, mk in zip(runs, EXP_A_FILES, (C1, C2), ("o", "s")):
+    for (f, r), col, mk in zip(exp_a_runs(), (C1, C2, C3, C4), ("o", "s", "^", "D")):
         m, p = -r["meas"], -r["pred"]
         ratio = p.mean() / m.mean()
         corr = float(np.corrcoef(p, m)[0, 1])
-        name = f.split("_")[2]
+        name = f.split("_")[1]
         ax.scatter(m, p, s=16, color=col, marker=mk, alpha=0.8, edgecolors="white", linewidths=0.4,
                    label=f"Run {name} (ratio {ratio:.3f}, r = {corr:.3f})")
         res[name] = (ratio, corr, len(m))
@@ -292,10 +401,10 @@ def fig04(d, out):
 
 # ---------------------------------------------------------------- 図5
 def fig05(d, out):
-    eff = read_csv(os.path.join(d, "compaction", "expB3_patterns", "effects.csv"))
+    eff = read_csv(A("cut_patterns", "effects.csv"))
     cats = [("全幅 1.16 深0.8m", "Full width\n(0.8 m)"), ("履帯2本 1.16 深0.8m", "Two tracks\n(0.8 m)"),
             ("中央 1.16 深0.8m", "Center\n(0.8 m)"), ("全幅 1.16 深0.3m", "Full width,\nshallow (0.3 m)")]
-    cmp_rows = [r for r in read_csv(os.path.join(d, "compaction", "expB2", "compare.csv")) if r["region"] == "踏固め"]
+    cmp_rows = [r for r in read_csv(A("cut_then_cut", "compare.csv")) if r["region"] == "踏固め"]
     b2 = [fl(r["R_sep_comp"]) / fl(r["R_sep_ctrl"]) for r in cmp_rows]
     fig, ax = plt.subplots(figsize=(7.0, 3.6))
     res = {}
@@ -327,7 +436,7 @@ def fig05(d, out):
 
 # ---------------------------------------------------------------- 図6
 def levels_ratio(d):
-    eff = read_csv(os.path.join(d, "compaction", "expB3_levels", "effects.csv"))
+    eff = read_csv(A("cut_levels", "effects.csv"))
     by = defaultdict(list)
     for r in eff:
         by[round(fl(r["level"]), 2)].append(fl(r["R_sep_N_ratio"]))
@@ -336,8 +445,8 @@ def levels_ratio(d):
 
 
 def fig06(d, out):
-    curve = [r for r in read_csv(os.path.join(d, "compaction", "calibration", "curve.csv")) if r["seg_m"] == "1.0"]
-    cv = [r for r in read_csv(os.path.join(d, "compaction", "calibration", "cv.csv")) if r["seg_m"] == "1.0"]
+    curve = [r for r in read_csv(A("calibration", "curve.csv")) if r["seg_m"] == "1.0"]
+    cv = [r for r in read_csv(A("calibration", "cv.csv")) if r["seg_m"] == "1.0"]
     c = np.array([fl(r["c"]) for r in curve]); S = np.array([fl(r["S_mm"]) for r in curve])
     sd = np.array([fl(r["S_sd_mm"]) for r in curve])
     fig, axs = plt.subplots(2, 1, figsize=(5.6, 6.2), sharex=True)
@@ -365,7 +474,7 @@ def fig06(d, out):
 
 # ---------------------------------------------------------------- 図7
 def fig07(d, out):
-    cv = [r for r in read_csv(os.path.join(d, "compaction", "calibration", "cv.csv")) if r["seg_m"] == "1.0"]
+    cv = [r for r in read_csv(A("calibration", "cv.csv")) if r["seg_m"] == "1.0"]
     c = np.array([fl(r["c"]) for r in cv]); ch = np.array([fl(r["c_hat"]) for r in cv])
     err = ch - c
     rmse = lambda m: float(np.sqrt(np.mean(err[m] ** 2)))
@@ -386,16 +495,80 @@ def fig07(d, out):
 
 
 # ---------------------------------------------------------------- 図8
+def calibration_curve(seg=1.0):
+    """図6(a)・図7 と同じ較正曲線（calibrate_settlement.py の既定の設定で、settlement/cells.csv から作る）"""
+    cells = cs.load_cells(A("settlement", "cells.csv"), "c_start")
+    segments, _ = cs.make_segments(cells, seg, 0.01, 2)
+    return cs.build_curve(segments, 0.02)
+
+
+def then_cut_profile(path, cells_rows, curve, seg=1.0):
+    """B2 の1記録の、1 m 区間ごとの (x0, 逆算値, 地表の程度, 深さ方向の平均)（削る直前の値。履帯の位置のマス）"""
+    rows = cc.load(path)
+    cols, _ = cc.depth_columns(rows)
+    t0 = cts.cut_start_time(cts.load(path))
+    tb = cc.by_time(rows)
+    t_cut = cc.nearest_time(sorted(tb), t0)
+    snap = {(r["lane"], r["unity_ix"], r["unity_iy"]): r for r in tb[t_cut]}
+    seg_cells = defaultdict(list)
+    for c in cells_rows:
+        x = fl(c["x"])
+        r = next((v for k, v in snap.items() if k[0] == c["lane"] and abs(v["_x"] - x) < 1e-3), None)
+        col = cc.column_average(r, r, cols, 0.3125, 0.0, COL_DEPTH)[0] if r is not None else math.nan
+        seg_cells[(math.floor(x / seg))].append((fl(c["c_start"]), col, -fl(c["extra_mm"])))
+    out = []
+    for k in sorted(seg_cells):
+        v = np.array(seg_cells[k])
+        if len(v) < 2:
+            continue
+        S = float(np.mean(v[:, 2]))
+        out.append((k * seg, cs.invert(curve, S)[0], float(np.mean(v[:, 0])), float(np.nanmean(v[:, 1])), S))
+    return out
+
+
 def fig08(d, out):
-    print("  図8は描きません：自然に踏み固めた地面（ex_compaction_then_cut）の締固めの記録"
-          "（compaction_*_ex_compaction_then_cut.csv）が data/ に残っていません")
-    return None
+    curve = calibration_curve()
+    cells = read_csv(A("settlement_then_cut", "cells.csv"))
+    meta = {os.path.basename(r["記録"])[:-4] + "_compaction.csv": int(r["seed"]) for r in MANIFEST
+            if r["実験"] == "B2_then_cut" and r["使う"].startswith("○")}
+    comp_files = [p for p in records("B2_then_cut", True)]
+    fig, axs = plt.subplots(1, 2, figsize=(8.6, 3.6), sharey=True)
+    res, pooled = {}, defaultdict(list)
+    for p in comp_files:
+        name = os.path.basename(p)
+        compacted = meta[name] % 2 == 0
+        prof = then_cut_profile(p, [c for c in cells if c["file"] == name], curve)
+        ax = axs[0 if compacted else 1]
+        x = [v[0] + 0.5 for v in prof]
+        first = not ax.lines
+        ax.plot(x, [v[1] for v in prof], color=C1, marker="o", ms=4, label="Estimated (calibration curve)" if first else None)
+        ax.plot(x, [v[2] for v in prof], color=C2, marker="s", ms=4, ls="--", mfc="white",
+                label="Surface (before cutting)" if first else None)
+        ax.plot(x, [v[3] for v in prof], color=C3, marker="^", ms=4, ls=":",
+                label=f"Mean to {COL_DEPTH:.1f} m depth (before cutting)" if first else None)
+        for v in prof:
+            key = "compacted" if v[2] > 1.01 else "not compacted"
+            pooled[(compacted, key)].append(v)
+    for ax, title in zip(axs, ("(a) Compacted by tracks (2 round trips), then cut", "(b) Control: cut without compaction")):
+        ax.axhline(1, color=INK2, lw=0.8, ls="--")
+        ax.set(xlabel="x along path (from machine reference at start) [m]", title=title)
+    axs[0].set_ylabel("Degree of compaction [-]")
+    axs[0].legend(fontsize=7.5, loc="upper right")
+    note(axs[1], "1 m segments, cells under tracks;\none line per run", "upper right")
+    fig.tight_layout()
+    save(fig, out, "fig08_natural_compaction.png")
+    for (compacted, key), vs in sorted(pooled.items()):
+        v = np.array(vs)
+        tag = ("B2 compacted run, " if compacted else "B2 control run, ") + key
+        res[tag] = (f"estimated {np.nanmean(v[:, 1]):.3f}, surface {np.nanmean(v[:, 2]):.3f}, "
+                    f"depth mean {np.nanmean(v[:, 3]):.3f}, S {np.nanmean(v[:, 4]):.1f} mm (n={len(v)} segments)")
+    return res
 
 
 # ---------------------------------------------------------------- 図9
 def hardening_ratios(d, cond):
     """各帯の比抵抗 ÷ 同じ記録の帯2・4（地山）の比抵抗の平均（docs/phase0.md §3.4 の表の定義）"""
-    rows = read_csv(os.path.join(d, "hardening", cond, "cut_bands", "bands.csv"))
+    rows = read_csv(A(f"hardening_{cond}", "cut_bands", "bands.csv"))
     byf = defaultdict(list)
     for r in rows:
         byf[r["file"]].append(r)
@@ -435,8 +608,8 @@ def fig10(d, out):
     fig, ax = plt.subplots(figsize=(5.6, 3.9))
     res = {}
     for k, (cond, label, col) in enumerate(HARDENING):
-        rows = read_csv(os.path.join(d, "hardening", cond, "settlement", "by_level.csv"))
-        fit = {r["x"]: r for r in read_csv(os.path.join(d, "hardening", cond, "settlement", "fit.csv"))}["c_start"]
+        rows = read_csv(A(f"hardening_{cond}", "settlement", "by_level.csv"))
+        fit = {r["x"]: r for r in read_csv(A(f"hardening_{cond}", "settlement", "fit.csv"))}["c_start"]
         c = np.array([fl(r["c_start"]) for r in rows]) + (k - 1) * 0.004
         S = -np.array([fl(r["extra_mm"]) for r in rows]); sd = np.array([fl(r["extra_sd"]) for r in rows])
         ax.errorbar(c, S, yerr=sd, color=col, marker="o", ms=4, capsize=2, lw=1.3,
@@ -477,23 +650,122 @@ def fig11(d, out):
             "E/E0 default at w=lo": f"{1 - abs(lo - 1) ** 0.0833:.2f}"}
 
 
+# ---------------------------------------------------------------- 追加の確認（本文の結論は変えない）
+def check_pen_reference(d):
+    """図5：貫入抵抗の比を、前の地山の帯・後ろの地山の帯・両隣の平均のそれぞれで割って比べる"""
+    rows = read_csv(A("cut_patterns", "bands.csv"))
+    byf = defaultdict(dict)
+    for r in rows:
+        byf[r["file"]][int(r["band"])] = r
+    out = defaultdict(lambda: defaultdict(list))
+    for bands in byf.values():
+        for i in (1, 3):
+            if i not in bands or (i - 1) not in bands or (i + 1) not in bands:
+                continue
+            for key in ("R_pen_N", "R_sep_N"):
+                v, prev, nxt = (fl(bands[j][key]) for j in (i, i - 1, i + 1))
+                lab = bands[i]["label"]
+                out[(lab, key)]["prev"].append(v / prev)
+                out[(lab, key)]["next"].append(v / nxt)
+                out[(lab, key)]["both"].append(v / ((prev + nxt) / 2))
+    bank = defaultdict(list)   # 地山の帯どうしの比（後ろ ÷ 前）：帯の位置だけで増える分
+    for bands in byf.values():
+        for i in (0, 2):
+            if i in bands and (i + 2) in bands:
+                for key in ("R_pen_N", "R_sep_N"):
+                    bank[(i, i + 2, key)].append(fl(bands[i + 2][key]) / fl(bands[i][key]))
+    res = {}
+    for (lab, key), v in sorted(out.items()):
+        res[f"{lab} {key} ratio prev/next/both"] = " / ".join(f"{np.mean(v[k]):.2f}" for k in ("prev", "next", "both"))
+    for (i, j, key), v in sorted(bank.items()):
+        res[f"bank band{j}/band{i} {key}"] = f"{np.mean(v):.2f} (n={len(v)})"
+    return res
+
+
+def check_edge_layer_w(d, blade_offset=2.8, trim=0.5):
+    """図11：帯2・4 で刃が来る直前の、刃先の高さに当たるボクセルの締固めの程度（CompactionProbe）と、
+    同じ帯の state_compaction_mean（check_cut_bands.py の bands.csv の state_c）を並べる"""
+    res = {}
+    depth = 0.08    # ex_compaction_bands・levels の切削深さ
+    for cond, exp in HARDENING_SETS.items():
+        st = defaultdict(list)
+        for r in read_csv(A(f"hardening_{cond}", "cut_bands", "bands.csv")):
+            if r["band"] in ("2", "4"):
+                st[r["band"]].append(fl(r["state_c"]))
+        w = defaultdict(list)
+        for p in records(exp, True):
+            rows = cc.load(p)
+            cols, _ = cc.depth_columns(rows)
+            tb = cc.by_time(rows)
+            times = sorted(tb)
+            first = {r["_cell"]: r for r in tb[times[0]]}
+            mx = {t: tb[t][0]["_mx"] if "_mx" in tb[t][0] else fl(tb[t][0]["machine_x"]) for t in times}
+            for band, (a, b) in (("2", (5.0, 7.0)), ("4", (9.0, 11.0))):
+                lo, hi = a + trim + blade_offset, b - trim + blade_offset     # 締固めの記録の x（機体の基準点が原点）
+                for cell, r0 in first.items():
+                    if r0["_group"] not in ("track_L", "track_R", "center") or not lo <= r0["_x"] <= hi:
+                        continue
+                    before = [t for t in times if mx[t] + blade_offset < r0["_x"]]
+                    if not before:
+                        continue
+                    r = next((v for v in tb[before[-1]] if v["_cell"] == cell), None)
+                    if r is None:
+                        continue
+                    h_edge = r0["_h"] - depth
+                    k = math.floor(r["_h"] / 0.3125 + 0.5) - math.floor(h_edge / 0.3125 + 0.5)
+                    if 0 <= k < len(cols):
+                        w[band].append(cc.to_float(r[cols[k]]))
+        for band in ("2", "4"):
+            v, s_ = np.array(w[band]), np.array(st[band])
+            res[f"{cond} band{band} edge-layer w (probe)"] = (
+                f"mean {v.mean():.4f}, min {v.min():.4f}, max {v.max():.4f}, share<1 {np.mean(v < 0.9995) * 100:.0f}% (n={len(v)} cells)"
+                if len(v) else "no probe cells (outside probe range x <= 12 m)")
+            res[f"{cond} band{band} state_compaction_mean"] = (
+                f"mean {s_.mean():.4f}, min {s_.min():.4f}, max {s_.max():.4f} (n={len(s_)} runs)")
+    return res
+
+
+CHECKS = {"check5_pen_reference": check_pen_reference, "check11_edge_layer_w": check_edge_layer_w}
+
+
 FIGS = {1: fig01, 2: fig02, 3: fig03, 4: fig04, 5: fig05, 6: fig06, 7: fig07, 8: fig08, 9: fig09, 10: fig10, 11: fig11}
 
 
 def main():
-    global OPTS
-    ap = argparse.ArgumentParser(description="フェーズ0 の図1〜11 を描く")
-    ap.add_argument("--data", default=os.path.join(WS, "data"), help="データのフォルダ（既定 <ws>/data）")
-    ap.add_argument("--out", default=os.path.join(WS, "data", "figures", "phase0"), help="出力先")
-    ap.add_argument("--only", type=int, nargs="+", help="描く図の番号（例 --only 6 7）")
+    global OPTS, MANIFEST
+    ap = argparse.ArgumentParser(description="フェーズ0 の図1〜11 と本文の値の表を作る")
+    ap.add_argument("--data", default=os.path.join(WS, "data", "phase0"), help="記録のフォルダ（既定 <ws>/data/phase0）")
+    ap.add_argument("--out", help="図の出力先（既定 <data>/figures）")
+    ap.add_argument("--only", type=int, nargs="+", help="描く図の番号（例 --only 6 7）。figure_values.csv は書かない")
+    ap.add_argument("--skip-analysis", action="store_true", help="解析を実行せず、前回の data/phase0/analysis/ を使う")
     ap.add_argument("--dpi", type=int, default=150)
     OPTS = ap.parse_args()
+    OPTS.out = OPTS.out or os.path.join(OPTS.data, "figures")
+    MANIFEST = read_manifest(OPTS.data)
     os.makedirs(OPTS.out, exist_ok=True)
+    if not OPTS.skip_analysis:
+        print("解析")
+        run_analysis()
+    values = []
     for n in OPTS.only or sorted(FIGS):
         print(f"図{n}")
         res = FIGS[n](OPTS.data, OPTS.out)
         for k, v in (res or {}).items():
             print(f"  {k}: {v}")
+            values.append({"figure": n, "item": k, "value": v})
+    if OPTS.only:
+        return
+    for name, fn in CHECKS.items():
+        print(name)
+        for k, v in fn(OPTS.data).items():
+            print(f"  {k}: {v}")
+            values.append({"figure": name, "item": k, "value": v})
+    p = os.path.join(OPTS.data, "figure_values.csv")
+    with open(p, "w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=["figure", "item", "value"])
+        w.writeheader()
+        w.writerows(values)
+    print(f"保存: {p}")
 
 
 if __name__ == "__main__":
