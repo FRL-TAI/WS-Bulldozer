@@ -5,21 +5,23 @@
 0. シーンの読み込み直し(機体・地形・AGX の状態をすべて初期状態に戻す)
 1. 設定（土質・地形の加工）
 2. 地面高さの計測
-3. 記録開始
+3. 記録開始（エピソードの CSV と、RECORD_COMPACTION のエピソードでは締固めの CSV）
 4. 排土板を下げる
 5. 走行
 6. 排土板を上げる
-7. 記録終了
+7. 記録終了（締固めの CSV は、phase を done にした後の最後の記録を受け取ってから閉じる）
 
 開始位置への後退は行わない（次のエピソードの最初にシーンを読み込み直すため）。
 """
 import math
 import numbers
+import os
 
 import numpy as np
 
 from .. import config as C
 from ..episodes import Command, Observation
+from ..recording.compaction_recorder import CompactionRecorder
 from ..recording.recorder import Recorder
 
 
@@ -39,6 +41,7 @@ class EpisodeRunner:
     def __init__(self, iface):
         self.iface = iface
         self.recorder = Recorder(iface)
+        self.compaction = CompactionRecorder(iface)
 
     # ----- 補助関数 -----
     def _phase(self, phase):
@@ -121,6 +124,8 @@ class EpisodeRunner:
 
     @staticmethod
     def _check_soil(episode, st):
+        """要求した材料パラメータが AGX に反映されたかを、Unity が読み戻した値で確かめる。
+        None（Unity 側の値のまま）の項目は確かめない"""
         s = episode.soil
         checks = [("cohesion", s.cohesion, 1.0), ("friction_angle_deg", s.friction_angle_deg, 0.01),
                   ("density", s.density, 0.5)]
@@ -128,14 +133,15 @@ class EpisodeRunner:
             checks.append(("swell_factor", s.swell_factor, 1e-3))
         if s.youngs_modulus is not None:
             checks.append(("youngs_modulus", s.youngs_modulus, 1.0))
+        # AGX は float で保持するので、0.0833 は 0.0833000019… として読み戻される（許容差 1e-6 で十分）
+        if s.hardening_ke is not None:
+            checks.append(("hardening_ke", s.hardening_ke, 1e-6))
+        if s.hardening_ne is not None:
+            checks.append(("hardening_ne", s.hardening_ne, 1e-6))
         for key, want, tol in checks:
             got = st.get(key)
             if got is None or abs(got - want) > tol + 1e-6 * abs(want):
                 raise RuntimeError(f"{key} が反映されていません（要求 {want}, AGX {got}）")
-        for key in ("hardening_ke", "hardening_ne"):
-            want = getattr(s, key)
-            if want is not None:
-                checks.append((key, want, 1e-6))
 
     # ----- 本体 -----
     def run(self, episode, index, total, csv_path=None, on_tick=None):
@@ -178,6 +184,11 @@ class EpisodeRunner:
         # 3. 記録開始
         if csv_path:
             self.recorder.start(csv_path, h0, (x0, y0), labels, meta)
+            # 締固めの記録は、Unity の CompactionProbe が phase "lowering" から送り始める。
+            # setup の request_id が一致するものだけを保存するので、前のエピソードの記録は混ざらない
+            if episode.RECORD_COMPACTION:
+                comp_path = os.path.splitext(csv_path)[0] + "_compaction.csv"
+                self.compaction.start(comp_path, st.get("request_id"))
         summary = {
             "ground_h0": h0, **labels,
             # 開始位置・向き（読み込み直しで毎回同じ状態から始まっているかの記録）
@@ -228,10 +239,16 @@ class EpisodeRunner:
                 self._sleep(stop_on_depth=False)   # 深く入っていても上げ続けるほうが安全
             iface.stop_all()
             summary["raise_depth_over_max"] = self._depth_over_max
+        except BaseException:
+            # エラーや Ctrl+C で止まった場合は、最後の記録を待たずに締固めの CSV を閉じる
+            self.compaction.finish(timeout=0)
+            raise
         finally:
             # 7. 記録終了（エラーや Ctrl+C で止まった場合も必ず実行する）
             summary.update(self.recorder.stop())
             iface.stop_all()
 
+        # done にすると、Unity の CompactionProbe が最後の記録（final）を送る。それを受け取ってから閉じる
         self._phase("done")
+        summary.update(self.compaction.finish(timeout=3.0))
         return summary

@@ -38,6 +38,7 @@ class CompactionBands(Episode):
     description = "【実験B1】締固めの程度を変えた帯（地山・踏み固め・緩み）を一定の深さで横切って削る"
     SOIL_RANGES = {k: (v, v) for k, v in SOIL.items()}   # 下限 = 上限 にして土質を固定
     REQUIRES_GRID_CONTROL = True
+    RECORD_COMPACTION = True
 
     BAND_START = 1.0        # 最初の帯の始まり [m]（刃先の開始位置から）
     BAND_LENGTH = 2.0       # 帯の長さ [m]

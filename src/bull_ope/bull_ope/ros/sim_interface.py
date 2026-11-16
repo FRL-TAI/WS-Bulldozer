@@ -36,8 +36,9 @@ class SimInterface(Node):
         self.cmd_vx = 0.0
         self.cmd_wz = 0.0
         self.cmd_lift = 0.0
-        
+
         self.blade_listeners = []   # blade_state を受信するたびに呼ぶ関数（記録用）
+        self.probe_listeners = []   # compaction_probe を受信するたびに呼ぶ関数（記録用。引数は JSON の文字列）
         self._pose_hist = deque(maxlen=200)   # 速度の計算用の (時刻, x, y, z, yaw) の履歴
         self._request_id = int(time.time()) % 100000
 
@@ -45,6 +46,7 @@ class SimInterface(Node):
         self.create_subscription(JointState, C.TOPIC_JOINT_STATES, self._on_joints, 50)
         self.create_subscription(Odometry, C.TOPIC_POSE, self._on_pose, 50)
         self.create_subscription(String, C.TOPIC_EPISODE_STATUS, self._on_status, 10)
+        self.create_subscription(String, C.TOPIC_COMPACTION_PROBE, self._on_probe, 10)
         self.pub_vel = self.create_publisher(Twist, C.TOPIC_CMD_VEL, 10)
         self.pub_blade = self.create_publisher(JointCmd, C.TOPIC_BLADE_CMD, 10)
         self.pub_episode = self.create_publisher(String, C.TOPIC_EPISODE_CMD, 10)
@@ -110,6 +112,12 @@ class SimInterface(Node):
             self.status = json.loads(msg.data)
         except json.JSONDecodeError:
             self.get_logger().warn(f"episode_status を解釈できません: {msg.data[:200]}")
+
+    def _on_probe(self, msg):
+        """CompactionProbe（Unity）の記録を受信し、記録用の関数に JSON の文字列のまま渡す。
+        解釈と保存は CompactionRecorder が行う（request_id が一致するものだけを保存する）"""
+        for cb in list(self.probe_listeners):
+            cb(msg.data)
 
 
     # ----- 時間 -----
@@ -192,6 +200,8 @@ class SimInterface(Node):
             "phase": "setup",
             "soil": episode.soil.to_msg_dict(),
             "terrain_ops": [op.to_msg_dict() for op in episode.terrain_ops()],
+            # Unity の CompactionProbe に、このエピソードの締固めを記録させるか
+            "record_compaction": bool(getattr(episode, "RECORD_COMPACTION", False)),
         }
         msg = String(data=json.dumps(cmd))
         deadline = time.monotonic() + C.SETUP_TIMEOUT

@@ -85,6 +85,8 @@ class Episode(ABC):
         "density": (1300.0, 1900.0),   # Maximum Density（2000）を超えないこと
     }
     REQUIRES_GRID_CONTROL = False   # terrain_ops で締固めを操作するなら True
+    RECORD_COMPACTION = False       # True なら Unity の CompactionProbe が地形の高さと締固めの程度を記録し、
+                                    # エピソードの CSV の隣に <名前>_compaction.csv として保存する
     MAX_DISTANCE = 10.0             # 走行距離 [m]
     TIMEOUT = 60.0                  # 走行時間の上限 [s]
 
@@ -121,4 +123,5 @@ class Episode(ABC):
         d.update({f"soil_{k}": v for k, v in asdict(self.soil).items()})
         d.update({f"param_{k}": v for k, v in self.params.items()})
         d["n_terrain_ops"] = len(self.terrain_ops())
+        d["record_compaction"] = bool(self.RECORD_COMPACTION)
         return d
