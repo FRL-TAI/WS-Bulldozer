@@ -58,6 +58,7 @@ run_<日時>_<実行名>/
 | `compaction_path`、`compaction_snapshots`、`compaction_rows`、`compaction_final` | 締固めの記録のパス、受け取った回数、行数、最後の記録が届いたか（`record_compaction` のエピソードだけ） |
 | `status` | `ok`、`skipped: 理由`、`error: 内容` |
 
+- `label_E0`：既定の硬化の設定（KE 1・NE 0.0833）では、削っている最中の地山の実際の剛性は E0 より小さい（notes の docs/phase0.md §3.4）。
 - エラーやスキップで止まったエピソードは、止まった時点までに決まっている列（エピソードの情報と `status`）だけが入る。
 - NumPy の型や NaN・無限大は、書き出す前に普通の型（NaN・無限大は `null`）に変換する（`recording/json_utils.py`）。
 
