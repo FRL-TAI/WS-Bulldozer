@@ -4,8 +4,16 @@
   <name>bull_ope</name>
   <version>0.0.0</version>
   <description>OperaSim-AGX のブルドーザで押土のエピソードを実行し、土質パラメータ推定用のデータを記録する</description>
-  <maintainer email="riku.tai.16@gmail.com">root</maintainer>
+  <maintainer email="s2513879@u.tsukuba.ac.jp">Taisei Yamamoto</maintainer>
   <license>Proprietary</license>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>nav_msgs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>com3_msgs</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
 
   <export>
     <build_type>ament_python</build_type>

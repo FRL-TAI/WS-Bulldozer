@@ -13,8 +13,8 @@ setup(
     ],
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='root',
-    maintainer_email='riku.tai.16@gmail.com',
+    maintainer='Taisei Yamamoto',
+    maintainer_email='s2513879@u.tsukuba.ac.jp',
     description='OperaSim-AGX のブルドーザで押土のエピソードを実行し、土質パラメータ推定用のデータを記録する',
     license='Proprietary',
     entry_points={
