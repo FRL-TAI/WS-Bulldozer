@@ -1,11 +1,11 @@
 """
 関門3（単位・座標・符号）の点検。collect_data の出力フォルダ（または test_episode の CSV）を調べる。
 
-置き場所: src/bull_ope/analysis/checks/check_units.py
+置き場所: analysis/validation/check_units.py
 使い方:
-  cd /workspaces/ws-bulldozer/src/bull_ope
-  python3 analysis/checks/check_units.py <collect_data の出力フォルダ> [--report 結果.md]
-  python3 analysis/checks/check_units.py <CSV> [<CSV> …] [--report 結果.md]
+  cd /workspaces/ws-bulldozer
+  python3 analysis/validation/check_units.py <collect_data の出力フォルダ> [--report 結果.md]
+  python3 analysis/validation/check_units.py <CSV> [<CSV> …] [--report 結果.md]
 
 エピソードの種類に応じて、次を確かめる（判定は OK / WARN / NG、「参考」は判定しない）。
 

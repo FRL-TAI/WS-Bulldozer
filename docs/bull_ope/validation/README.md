@@ -10,7 +10,7 @@
 ## 1. 関門の一覧と結論
 | 関門 | 確かめたこと | 使ったエピソード | 主な結論 | レポート |
 | --- | --- | --- | --- | --- |
-| 1 | スクリプトの不具合（失敗しても次に影響しないか、おかしな値が送られないか、長く続けても劣化しないか） | `stress_*` | 10 件の不具合を見つけて修正した（NaN の指令、力の符号、ROS の接続の漏れ、HUD の積み重なりなど）。修正後、読み込み直し 84 回で劣化なし | [gate1_stress.md](gate1_stress.md) |
+| 1 | スクリプトの不具合（失敗しても次に影響しないか、おかしな値が送られないか、長く続けても劣化しないか） | `stress_*` | 11 件の不具合を見つけて修正した（NaN の指令、力の符号、ROS の接続の漏れ、HUD の積み重なりなど）。修正後、読み込み直し 84 回で劣化なし | [gate1_stress.md](gate1_stress.md) |
 | 2 | 記録の健全さ（抜け・食い違いがないか） | `val_*` | 記録は健全。global_pose・joint_states は約 38 Hz で届き、最大 6 行同じ値が続く | [gate2_recording.md](gate2_recording.md) |
 | 3 | 単位・座標・符号 | `val_*`、`ex_back_blading`、`ex_turning` | 誤りなし。`ground_below` は削った後の地面ではないので `ground_behind` を追加。`LIFT_KP` を 3.0 に。`F_def`・`F_con` が 0 の理由を特定 | [gate3_units_frames.md](gate3_units_frames.md) |
 | 4 | 時間のずれ | `val_*`、`ex_stop_and_go` | joint_states・global_pose は 20 ms、計算した速度は約 60 ms 遅れる。値はずらさず、時間窓を 1.2 秒以上にする | [gate4_timing.md](gate4_timing.md) |
@@ -23,36 +23,36 @@
 - **手段**のコマンドは、同じ検証をやり直せる形で書いている。`<日時>` の部分は、`collect_data` などが作ったフォルダの名前に置き換える。
 - **結果**の数値は、各レポートの冒頭の「検証した環境」で検証したときの値。OperaSim・AGX の版や、排土板の制御・記録の仕組みを変えた場合は、関係する関門をやり直して値を確かめる。
 - どのコミットで検証したかは、Git のタグ（`gate1`〜`gate7`）で残す。`git show gate3` などで、その時点のコードを確かめられる。
-- 結果のデータは `src/bull_ope/data/validation/`（関門1〜6）と `src/bull_ope/data/pilot/`（関門7）に保存される（Git の管理外）。
+- 結果のデータは `data/validation/`（関門1〜6）と `data/pilot/`（関門7）に保存される（Git の管理外）。
 
 
 ## 2. 検証の道具
-`src/bull_ope/analysis/` 以下にある。ROS2 のパッケージとしてはインストールされないので、ビルドせずに `python3` や `bash` で実行する。点検のスクリプトは、どれも `collect_data` の出力フォルダ（または CSV）を引数にとり、`--report 結果.md` で結果を Markdown に保存できる。
+ワークスペース直下の `analysis/` にある（フォルダの分け方と一覧は [analysis/README.md](../../../analysis/README.md)）。ROS2 のパッケージとしてはインストールされないので、ビルドせずに `python3` や `bash` で実行する。点検のスクリプトは、どれも `collect_data` の出力フォルダ（または CSV）を引数にとり、`--report 結果.md` で結果を Markdown に保存できる。
 
 ```
-cd /workspaces/ws-bulldozer/src/bull_ope
-python3 analysis/checks/<スクリプト> <出力フォルダ> --report <出力フォルダ>/<結果>.md
+cd /workspaces/ws-bulldozer
+python3 analysis/<フォルダ>/<スクリプト> <出力フォルダ> --report <出力フォルダ>/<結果>.md
 ```
 
-### 2.1 点検のスクリプト（`analysis/checks/`）
+### 2.1 点検のスクリプト（`analysis/validation/`、`analysis/production/`）
 | スクリプト | 使った関門 | 調べること | 判定 |
 | --- | --- | --- | --- |
-| `check_collection.py` | 1〜7 | エピソードの結果（ok / error / skipped）が想定どおりか、開始位置・向きのばらつき（許容 2 cm、0.5°）、ラベルと要求した土質の一致、時系列データの行数・NaN | 想定外・要確認の件数 |
-| `check_recording.py` | 1〜3、7 | CSV ごとに、記録の周期（50 Hz）、時刻の逆戻り・重複、想定外の NaN、走行中に一定の列、ラベル（既定で dirt_1 と比べる。`--no-label` で飛ばす）、進行状況の順番、走行時間 | OK / WARN / NG |
-| `check_gate2.py` | 2〜7 | G1 列の構成、G2 行数の一致、G3 メタ情報の一致、G4 時刻の整合、G5 トピックの更新（同じ値の連続・遅れ）、G6 区間の長さ、G7 繰り返しの差 | OK / WARN / NG |
-| `check_units.py` | 3、7 | U1 空中の力、U2 押土の力の向き、U3 深さの追従、U4 刃先と削った後の地面、U5 速度と距離、U6 座標の整合、U7 値の範囲、U8 力の内訳（参考）、U9 記録の最初の状態（参考） | OK / WARN / NG / 参考 |
-| `inspect_depth.py` | 3 | 深さのずれの揺れ方（周期、ピッチとの相関）、刃先と地面の高さの関係、下げる区間。`--plot` で図を保存 | 判定なし |
-| `check_timing.py` | 4、7 | T1 global_pose の遅れ、T2 届く間隔、T3 速度の指令 → 車体の速度、T4 排土板の指令 → 刃先の動き、T5 トピックの間の遅れ（相互相関） | 判定なし |
-| `check_physics.py` | 5 | P1 削った体積と前後の力、P2・P3 削り始めの力と FEE、P4 上下と前後の力の比、P5 履帯の駆動力のつり合い、P6 排土板を支える力。1つの土質のデータが前提。`--plot` で図を保存 | 判定なし |
-| `check_sensitivity.py` | 6 | 条件ごとの特徴量（`Fpen`、`Fx_sat`、`Fz_sat` など）、基準の繰り返しのばらつき、基準との差 z | \|z\| ≥ 3 を区別できるとみなす |
-| `check_dataset.py` | 7、本番 | D1 結果の内訳、D2 土質の広がり、D3 関門5・6の関係（`dataset_flat_cut` を対象に回帰）、D4 本番の見積もり（`--target` で件数を指定） | 判定なし |
+| `production/check_collection.py` | 1〜7 | エピソードの結果（ok / error / skipped）が想定どおりか、開始位置・向きのばらつき（許容 2 cm、0.5°）、ラベルと要求した土質の一致、時系列データの行数・NaN | 想定外・要確認の件数 |
+| `validation/check_recording.py` | 1〜3、7 | CSV ごとに、記録の周期（50 Hz）、時刻の逆戻り・重複、想定外の NaN、走行中に一定の列、ラベル（既定で dirt_1 と比べる。`--no-label` で飛ばす）、進行状況の順番、走行時間 | OK / WARN / NG |
+| `validation/check_gate2.py` | 2〜7 | G1 列の構成、G2 行数の一致、G3 メタ情報の一致、G4 時刻の整合、G5 トピックの更新（同じ値の連続・遅れ）、G6 区間の長さ、G7 繰り返しの差 | OK / WARN / NG |
+| `validation/check_units.py` | 3、7 | U1 空中の力、U2 押土の力の向き、U3 深さの追従、U4 刃先と削った後の地面、U5 速度と距離、U6 座標の整合、U7 値の範囲、U8 力の内訳（参考）、U9 記録の最初の状態（参考） | OK / WARN / NG / 参考 |
+| `validation/inspect_depth.py` | 3 | 深さのずれの揺れ方（周期、ピッチとの相関）、刃先と地面の高さの関係、下げる区間。`--plot` で図を保存 | 判定なし |
+| `validation/check_timing.py` | 4、7 | T1 global_pose の遅れ、T2 届く間隔、T3 速度の指令 → 車体の速度、T4 排土板の指令 → 刃先の動き、T5 トピックの間の遅れ（相互相関） | 判定なし |
+| `validation/check_physics.py` | 5 | P1 削った体積と前後の力、P2・P3 削り始めの力と FEE、P4 上下と前後の力の比、P5 履帯の駆動力のつり合い、P6 排土板を支える力。1つの土質のデータが前提。`--plot` で図を保存 | 判定なし |
+| `validation/check_sensitivity.py` | 6 | 条件ごとの特徴量（`Fpen`、`Fx_sat`、`Fz_sat` など）、基準の繰り返しのばらつき、基準との差 z | \|z\| ≥ 3 を区別できるとみなす |
+| `production/check_dataset.py` | 7、本番 | D1 結果の内訳、D2 土質の広がり、D3 関門5・6の関係（`dataset_flat_cut` を対象に回帰）、D4 本番の見積もり（`--target` で件数を指定） | 判定なし |
 
-`check_physics.py`・`check_sensitivity.py`・`check_dataset.py` は互いの関数を使うので、同じフォルダに置いたまま使う。
+`check_dataset.py` は `check_sensitivity.py` の関数を、`check_sensitivity.py` は `check_physics.py` の関数を使う。`check_dataset.py` は `analysis/validation/` を `sys.path` に加えて読み込むので、フォルダの構成を変えるときは合わせて直す。
 
-### 2.2 実行のスクリプト（`analysis/scripts/`）
+### 2.2 実行のスクリプト（`analysis/validation/`）
 | スクリプト | 内容 |
 | --- | --- |
-| `run_stress_tests.sh` | 関門1の段階A〜D（`stress_*`）をまとめて実行し、点検まで行う。`bash src/bull_ope/analysis/scripts/run_stress_tests.sh [A B B2 C D]`。`PAUSE=1` で段階A を1件ずつ止める。結果は `data/validation/stress/<実行日時>/` |
+| `run_stress_tests.sh` | 関門1の段階A〜D（`stress_*`）をまとめて実行し、点検まで行う。`bash analysis/validation/run_stress_tests.sh [A B B2 C D]`。`PAUSE=1` で段階A を1件ずつ止める。結果は `data/validation/stress/<実行日時>/` |
 | `dryrun_stress.py` | Unity を使わずに、疑似の機体で各エピソードを `runner.py` に通し、例外の種類と記録の流れを数秒で確かめる。物理は再現しない。`runner.py` などを変えたときに、Unity で試す前に使う |
 
 ### 2.3 Unity 側での確認

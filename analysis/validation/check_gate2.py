@@ -1,10 +1,10 @@
 """
 関門2（記録の健全さ）のための追加の点検。collect_data の1回分の出力フォルダをまとめて調べる。
 
-置き場所: src/bull_ope/analysis/checks/check_gate2.py
+置き場所: analysis/validation/check_gate2.py
 使い方:
-  cd /workspaces/ws-bulldozer/src/bull_ope
-  python3 analysis/checks/check_gate2.py <collect_data の出力フォルダ> [--report 結果.md]
+  cd /workspaces/ws-bulldozer
+  python3 analysis/validation/check_gate2.py <collect_data の出力フォルダ> [--report 結果.md]
 
 check_recording.py（1ファイルごとの周期・欠損など）と check_collection.py（結果・開始位置・ラベル）で
 見ていない、次の点を確かめる。対象は status が ok のエピソード。

@@ -15,9 +15,9 @@
 
 使い方：
   python3 calibrate_settlement.py <cells.csv> [オプション]
-  例）python3 src/bull_ope/analysis/checks/calibrate_settlement.py \\
-          src/bull_ope/data/compaction/settlement/cells.csv \\
-          --seg 0.5 1 2 --out src/bull_ope/data/compaction/calibration --plot
+  例）python3 analysis/phase0/calibrate_settlement.py \\
+          data/compaction/settlement/cells.csv \\
+          --seg 0.5 1 2 --out data/compaction/calibration --plot
 
 オプション：
   --target       逆算する締固めの程度の列（既定 c_start：削る前の値。c_cut_col3：削った後の z0〜z2 の平均）

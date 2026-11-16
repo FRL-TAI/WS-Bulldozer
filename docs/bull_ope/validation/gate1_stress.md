@@ -32,14 +32,13 @@
 
 ```
 cd /workspaces/ws-bulldozer
-bash src/bull_ope/analysis/scripts/run_stress_tests.sh A          # 段階A（Unity の画面を見ながら）
-bash src/bull_ope/analysis/scripts/run_stress_tests.sh B2 B C D   # 段階B2〜D（約30分）
+bash analysis/validation/run_stress_tests.sh A          # 段階A（Unity の画面を見ながら）
+bash analysis/validation/run_stress_tests.sh B2 B C D   # 段階B2〜D（約30分）
 
 # 段階A の CSV の点検
-cd src/bull_ope
 R=data/validation/stress/<段階A の実行日時>
-python3 analysis/checks/check_recording.py $R/A/*.csv --report $R/check_A_recording.md
-python3 analysis/checks/check_recording.py $R/A/*stress_heavy_push.csv --c 30000 --phi 45 --rho 1950
+python3 analysis/validation/check_recording.py $R/A/*.csv --report $R/check_A_recording.md
+python3 analysis/validation/check_recording.py $R/A/*stress_heavy_push.csv --c 30000 --phi 45 --rho 1950
 
 # 段階D の間、別のターミナルで ROS-TCP-Endpoint との接続の数を見張る
 while true; do echo "$(date +%T)  接続数: $(awk '$2 ~ /:2710$/ && $4 == "01"' /proc/net/tcp /proc/net/tcp6 | wc -l)"; sleep 5; done

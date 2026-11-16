@@ -42,23 +42,22 @@
 ```
 cd /workspaces/ws-bulldozer
 ros2 run bull_ope collect_data --episodes val_sens_base --num 5 --seed 0 \
-    --run-name gate6_base --out src/bull_ope/data/validation/gate6
+    --run-name gate6_base --out data/validation/gate6
 ros2 run bull_ope collect_data \
     --episodes val_sens_c0 val_sens_c10k val_sens_c30k val_sens_phi25 val_sens_phi50 \
                val_sens_rho1200 val_sens_rho1900 val_sens_rho1900_phi33 val_sens_rho1200_phi46 \
                val_sens_v03 val_sens_v08 \
-    --num 2 --seed 1 --run-name gate6_vary --out src/bull_ope/data/validation/gate6
+    --num 2 --seed 1 --run-name gate6_vary --out data/validation/gate6
 ros2 run bull_ope collect_data --episodes val_sens_phi25 val_sens_phi50 --num 3 --seed 2 \
-    --run-name gate6_phi --out src/bull_ope/data/validation/gate6
+    --run-name gate6_phi --out data/validation/gate6
 
-cd src/bull_ope
 D=data/validation/gate6
 GB=$D/run_<日時>_gate6_base; GV=$D/run_<日時>_gate6_vary; GP=$D/run_<日時>_gate6_phi
 for d in $GB $GV $GP; do
-  python3 analysis/checks/check_gate2.py $d --report $d/check_gate2.md
-  python3 analysis/checks/check_collection.py $d | grep -A2 "ラベル"
+  python3 analysis/validation/check_gate2.py $d --report $d/check_gate2.md
+  python3 analysis/production/check_collection.py $d | grep -A2 "ラベル"
 done
-python3 analysis/checks/check_sensitivity.py $GB $GV $GP --report $D/check_sensitivity.md --plot $D/check_sensitivity.png
+python3 analysis/validation/check_sensitivity.py $GB $GV $GP --report $D/check_sensitivity.md --plot $D/check_sensitivity.png
 ```
 
 `check_sensitivity.py` は、エピソードごとに特徴量を求め（関門5と同じく距離 0.625 m ごとに平均してから）、基準との差 z =（その条件の平均 − 基準の平均）÷ 基準の繰り返しの標準偏差 を出す。|z| ≥ 3 を「区別できる」の目安とした。

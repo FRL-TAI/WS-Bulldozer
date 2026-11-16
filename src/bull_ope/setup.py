@@ -5,7 +5,7 @@ package_name = 'bull_ope'
 setup(
     name=package_name,
     version='0.0.0',
-    packages=find_packages(exclude=['test']),
+    packages=find_packages(),
     data_files=[
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
@@ -15,13 +15,8 @@ setup(
     zip_safe=True,
     maintainer='root',
     maintainer_email='riku.tai.16@gmail.com',
-    description='TODO: Package description',
-    license='TODO: License declaration',
-    extras_require={
-        'test': [
-            'pytest',
-        ],
-    },
+    description='OperaSim-AGX のブルドーザで押土のエピソードを実行し、土質パラメータ推定用のデータを記録する',
+    license='Proprietary',
     entry_points={
         'console_scripts': [
             'collect_data = bull_ope.apps.collect_data:main',

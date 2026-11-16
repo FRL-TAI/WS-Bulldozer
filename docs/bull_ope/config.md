@@ -12,7 +12,7 @@
 ## 保存先
 | 名前 | 値 | 内容 |
 | --- | --- | --- |
-| `DATA_DIR` | `/workspaces/ws-bulldozer/src/bull_ope/data` | 保存先。環境変数 `SOIL_DATA_DIR` で上書きできる |
+| `DATA_DIR` | `/workspaces/ws-bulldozer/data` | 保存先。環境変数 `SOIL_DATA_DIR` で上書きできる |
 
 ## 排土板の制御
 | 名前 | 値 | 内容 | 根拠 |

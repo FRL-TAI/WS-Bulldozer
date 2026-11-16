@@ -3,9 +3,9 @@
 # 関門1：スクリプトの不具合探し（stress_* エピソードの一括実行）
 #
 # 使い方（ワークスペースのどこからでも可）:
-#   bash src/bull_ope/analysis/scripts/run_stress_tests.sh            # 段階 A〜D をすべて実行
-#   bash src/bull_ope/analysis/scripts/run_stress_tests.sh A B        # 指定した段階だけ実行
-#   PAUSE=1 bash src/bull_ope/analysis/scripts/run_stress_tests.sh A  # 段階A で1つ終わるごとに Enter を待つ
+#   bash analysis/validation/run_stress_tests.sh            # 段階 A〜D をすべて実行
+#   bash analysis/validation/run_stress_tests.sh A B        # 指定した段階だけ実行
+#   PAUSE=1 bash analysis/validation/run_stress_tests.sh A  # 段階A で1つ終わるごとに Enter を待つ
 #
 # 段階:
 #   A  : stress_* を1つずつ test_episode で実行（Unity の画面を見ながら確かめる）
@@ -14,16 +14,15 @@
 #   C  : 土質を極端な範囲で変えて連続実行（ラベルの入れ替わりの確認）
 #   D  : 2 秒のエピソードを 50 回（シーンの読み込み直しの耐久試験）
 #
-# 結果: src/bull_ope/data/validation/stress/<実行日時>/ に、CSV・ログ・点検結果をまとめて保存する
+# 結果: data/validation/stress/<実行日時>/ に、CSV・ログ・点検結果をまとめて保存する
 # 前提: Unity が Play 中であること。config.py の SAFE_RADIUS が設定されていること
 # =============================================================================
 set -u
 
 WS=/workspaces/ws-bulldozer
-PKG=$WS/src/bull_ope
-CHECK=$PKG/analysis/checks/check_collection.py
+CHECK=$WS/analysis/production/check_collection.py
 STAMP=$(date +%Y%m%d_%H%M%S)
-OUT=$PKG/data/validation/stress/$STAMP
+OUT=$WS/data/validation/stress/$STAMP
 mkdir -p "$OUT"
 
 cd "$WS"

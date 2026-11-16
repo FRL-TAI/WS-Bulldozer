@@ -33,19 +33,18 @@ source install/setup.bash
 
 # 目で見る確認
 for ep in val_static val_air_run val_constant_depth val_depth_step; do
-  ros2 run bull_ope test_episode $ep --out src/bull_ope/data/validation/gate2/visual
+  ros2 run bull_ope test_episode $ep --out data/validation/gate2/visual
 done
 
 # 4種類 × 3回を記録
 ros2 run bull_ope collect_data --episodes val_static val_air_run val_constant_depth val_depth_step \
-    --num 3 --seed 0 --run-name gate2 --out src/bull_ope/data/validation/gate2
+    --num 3 --seed 0 --run-name gate2 --out data/validation/gate2
 
 # 点検
-cd src/bull_ope
 G=data/validation/gate2/run_<日時>_gate2
-python3 analysis/checks/check_collection.py $G --report $G/check_collection.md
-python3 analysis/checks/check_recording.py $G/ep[0-9]*.csv --report $G/check_recording.md
-python3 analysis/checks/check_gate2.py $G --report $G/check_gate2.md
+python3 analysis/production/check_collection.py $G --report $G/check_collection.md
+python3 analysis/validation/check_recording.py $G/ep[0-9]*.csv --report $G/check_recording.md
+python3 analysis/validation/check_gate2.py $G --report $G/check_gate2.md
 ```
 
 `check_gate2.py` で確かめる項目：

@@ -34,24 +34,24 @@
 | U8・U9 | 力の内訳の最大、記録の最初の行の状態 | 参考 |
 
 ```
-cd /workspaces/ws-bulldozer/src/bull_ope
+cd /workspaces/ws-bulldozer
 G=data/validation/gate2/run_<日時>_gate2
-python3 analysis/checks/check_units.py $G --report $G/check_units.md
-python3 analysis/checks/inspect_depth.py $G/ep*_val_constant_depth.csv $G/ep*_val_depth_step.csv $G/ep*_val_static.csv --plot
+python3 analysis/validation/check_units.py $G --report $G/check_units.md
+python3 analysis/validation/inspect_depth.py $G/ep*_val_constant_depth.csv $G/ep*_val_depth_step.csv $G/ep*_val_static.csv --plot
 ```
 
 ### 2.2 わかったことを受けて試す・調べる
 ```
 cd /workspaces/ws-bulldozer
 # (a) 制御のゲイン LIFT_KP を 1.0 → 3.0 にして試す（config.py を書き換えて）
-for i in 1 2; do ros2 run bull_ope test_episode val_constant_depth --seed $i --out src/bull_ope/data/validation/gate3/kp3; done
-python3 src/bull_ope/analysis/checks/inspect_depth.py src/bull_ope/data/validation/gate3/kp3/*.csv --plot
+for i in 1 2; do ros2 run bull_ope test_episode val_constant_depth --seed $i --out data/validation/gate3/kp3; done
+python3 analysis/validation/inspect_depth.py data/validation/gate3/kp3/*.csv --plot
 
 # (b) F_def・F_con が出るはずの動き（後退、旋回）を試す
 for ep in ex_back_blading ex_turning; do
-  ros2 run bull_ope test_episode $ep --out src/bull_ope/data/validation/gate3/forces
+  ros2 run bull_ope test_episode $ep --out data/validation/gate3/forces
 done
-python3 src/bull_ope/analysis/checks/check_units.py src/bull_ope/data/validation/gate3/forces/*.csv
+python3 analysis/validation/check_units.py data/validation/gate3/forces/*.csv
 ```
 
 (c) 後退中に排土板が土に当たっているかを、記録で調べた。後退中、刃先から 0.5 m 前方（`ground_ahead`）などは、排土板が少し前に通った場所なので、そこが削られているかを見る。
@@ -82,12 +82,11 @@ PY
 ```
 cd /workspaces/ws-bulldozer
 ros2 run bull_ope collect_data --episodes val_static val_air_run val_constant_depth val_depth_step \
-    --num 3 --seed 0 --run-name gate3 --out src/bull_ope/data/validation/gate3
-cd src/bull_ope
+    --num 3 --seed 0 --run-name gate3 --out data/validation/gate3
 G3=data/validation/gate3/run_<日時>_gate3
-python3 analysis/checks/check_gate2.py $G3 --report $G3/check_gate2.md
-python3 analysis/checks/check_units.py $G3 --report $G3/check_units.md
-python3 analysis/checks/inspect_depth.py $G3/ep*_val_constant_depth.csv $G3/ep*_val_depth_step.csv --plot
+python3 analysis/validation/check_gate2.py $G3 --report $G3/check_gate2.md
+python3 analysis/validation/check_units.py $G3 --report $G3/check_units.md
+python3 analysis/validation/inspect_depth.py $G3/ep*_val_constant_depth.csv $G3/ep*_val_depth_step.csv --plot
 ```
 
 

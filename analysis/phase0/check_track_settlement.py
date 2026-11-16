@@ -15,9 +15,9 @@ CompactionProbe の CSV（compaction_*.csv。ex_compaction_bands / patterns / le
 
 使い方：
   python3 check_track_settlement.py <compaction_*.csv> [...] [オプション]
-  例）python3 src/bull_ope/analysis/checks/check_track_settlement.py \\
-          src/bull_ope/data/compaction/compaction_*_ex_compaction_{bands,patterns,levels}.csv \\
-          --out src/bull_ope/data/compaction/settlement --plot
+  例）python3 analysis/phase0/check_track_settlement.py \\
+          data/compaction/compaction_*_ex_compaction_{bands,patterns,levels}.csv \\
+          --out data/compaction/settlement --plot
 
 オプション：
   --blade-offset  機体の基準点から刃先までの前方の距離 [m]（既定 2.8。実験B1 の記録から求めた値）

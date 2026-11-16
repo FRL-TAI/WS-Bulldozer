@@ -6,10 +6,10 @@ test_episode が記録した CSV（<DATA_DIR>/test/<日時>_ex_compaction_bands.
 
 使い方：
   python3 check_cut_bands.py <CSV> [<CSV> ...] [オプション]
-  例）python3 src/bull_ope/analysis/checks/check_cut_bands.py src/bull_ope/data/test/*_ex_compaction_bands.csv \\
-          --out src/bull_ope/data/compaction/cut_bands --plot
-  例）python3 src/bull_ope/analysis/checks/check_cut_bands.py src/bull_ope/data/test/*_ex_compaction_then_cut.csv \
-          --out src/bull_ope/data/compaction/then_cut --plot
+  例）python3 analysis/phase0/check_cut_bands.py data/test/*_ex_compaction_bands.csv \\
+          --out data/compaction/cut_bands --plot
+  例）python3 analysis/phase0/check_cut_bands.py data/test/*_ex_compaction_then_cut.csv \
+          --out data/compaction/then_cut --plot
 
   bull_ope をビルドして source install/setup.bash した端末で実行する（エピソードのクラスから帯の範囲を得るため）。
 

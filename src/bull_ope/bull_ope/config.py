@@ -13,7 +13,7 @@ TOPIC_EPISODE_STATUS = "/sim/episode_status"    # SimEpisodeManager.cs が送信
 TOPIC_COMPACTION_PROBE = "/sim/compaction_probe"   # CompactionProbe.cs が送信
 
 # ---------------- 保存先 ----------------
-# 環境変数 SOIL_DATA_DIR で上書きできる。既定はパッケージのソース内の data/
+# 環境変数 SOIL_DATA_DIR で上書きできる。既定はワークスペース直下の data/（git 管理外）
 DATA_DIR = os.environ.get(
     "SOIL_DATA_DIR", "/workspaces/ws-bulldozer/data")
 

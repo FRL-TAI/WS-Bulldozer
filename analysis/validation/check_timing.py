@@ -1,10 +1,10 @@
 """
 関門4（時間のずれ）の点検。トピックの間の時刻のずれと、指令から応答までの遅れを測る。
 
-置き場所: src/bull_ope/analysis/checks/check_timing.py
+置き場所: analysis/validation/check_timing.py
 使い方:
-  cd /workspaces/ws-bulldozer/src/bull_ope
-  python3 analysis/checks/check_timing.py <collect_data の出力フォルダ、または CSV> [...] [--report 結果.md]
+  cd /workspaces/ws-bulldozer
+  python3 analysis/validation/check_timing.py <collect_data の出力フォルダ、または CSV> [...] [--report 結果.md]
 
 記録は blade_state の到着ごと（シミュレーション時刻で 20 ms ごと）に1行で、他のトピックはその時点の最新値。
 blade_state の値（力・刃先・地面）は同じステップの値なので、ずれはない。ここでは次を測る。

@@ -24,8 +24,8 @@ SEED_BASE=${SEED_BASE:-1000}     # 区切り k の seed は SEED_BASE + 10 k（+
 # このスクリプトの場所から、パッケージとワークスペースの場所を求める（どこから実行してもよいように）
 PKG=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)      # .../src/bull_ope
 WS=$(cd "$PKG/../.." && pwd)                               # .../ws-bulldozer
-CHECKS=$PKG/analysis/checks
-OUT=${OUT:-$PKG/data/production}
+CHECKS=$WS/analysis/production
+OUT=${OUT:-$WS/data/production}
 
 cd "$WS"
 set +u                 # ROS2 の setup.bash は未定義の変数を使うので、読み込む間だけ外す

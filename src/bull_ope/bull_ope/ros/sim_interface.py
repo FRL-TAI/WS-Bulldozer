@@ -51,7 +51,6 @@ class SimInterface(Node):
         self.pub_blade = self.create_publisher(JointCmd, C.TOPIC_BLADE_CMD, 10)
         self.pub_episode = self.create_publisher(String, C.TOPIC_EPISODE_CMD, 10)
 
-
     # ----- 受信 -----
     def _on_blade(self, msg):
         if msg.layout.dim and msg.layout.dim[0].label:
@@ -119,7 +118,6 @@ class SimInterface(Node):
         for cb in list(self.probe_listeners):
             cb(msg.data)
 
-
     # ----- 時間 -----
     def now(self):
         """シミュレーション時刻 [s]"""
@@ -147,7 +145,6 @@ class SimInterface(Node):
             self.get_logger().info(f"受信待ち: {', '.join(missing)}", throttle_duration_sec=2.0)
             time.sleep(0.1)
         raise TimeoutError(f"トピックが届きません: {missing}。Unity が Play 中か確認してください")
-
 
     # ----- 送信 -----
     @staticmethod
@@ -201,7 +198,7 @@ class SimInterface(Node):
             "soil": episode.soil.to_msg_dict(),
             "terrain_ops": [op.to_msg_dict() for op in episode.terrain_ops()],
             # Unity の CompactionProbe に、このエピソードの締固めを記録させるか
-            "record_compaction": bool(getattr(episode, "RECORD_COMPACTION", False)),
+            "record_compaction": bool(episode.RECORD_COMPACTION),
         }
         msg = String(data=json.dumps(cmd))
         deadline = time.monotonic() + C.SETUP_TIMEOUT

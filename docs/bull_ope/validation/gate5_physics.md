@@ -32,20 +32,19 @@ AGX の反力が、土の力学の式（FEE：基本土工方程式）や力の�
 土の山の分と深さの分を分けるため、土の山がない状態から始まる「深さだけを変えたエピソード」（`val_constant_depth_3cm`・`9cm`・`12cm`。6 cm は既存の `val_constant_depth`）を追加した。
 
 ```
-cd /workspaces/ws-bulldozer/src/bull_ope
+cd /workspaces/ws-bulldozer
 # (a) 関門3のデータで試す
 G3=data/validation/gate3/run_<日時>_gate3
-python3 analysis/checks/check_physics.py $G3 --report $G3/check_physics.md --plot $G3/check_physics.png
+python3 analysis/validation/check_physics.py $G3 --report $G3/check_physics.md --plot $G3/check_physics.png
 
 # (b) 深さ 3・6・9・12 cm を 2 回ずつ記録して点検
 cd /workspaces/ws-bulldozer
 ros2 run bull_ope collect_data \
     --episodes val_constant_depth_3cm val_constant_depth val_constant_depth_9cm val_constant_depth_12cm \
-    --num 2 --seed 0 --run-name gate5 --out src/bull_ope/data/validation/gate5
-cd src/bull_ope
+    --num 2 --seed 0 --run-name gate5 --out data/validation/gate5
 G5=data/validation/gate5/run_<日時>_gate5     # 実際のフォルダ名に置き換える
-python3 analysis/checks/check_gate2.py $G5 --report $G5/check_gate2.md
-python3 analysis/checks/check_physics.py $G5 --report $G5/check_physics.md --plot $G5/check_physics.png
+python3 analysis/validation/check_gate2.py $G5 --report $G5/check_gate2.md
+python3 analysis/validation/check_physics.py $G5 --report $G5/check_physics.md --plot $G5/check_physics.png
 ```
 
 (c) すべてのエピソードをまとめ、直線の領域（V < 1.0 m³）と頭打ちの領域（V > 2.0 m³）に分けて近似した（`check_physics.py` の関数を使う短いスクリプト）。
@@ -55,7 +54,7 @@ python3 - $G5 <<'PY'
 import sys
 import numpy as np
 import pandas as pd
-sys.path.insert(0, "analysis/checks")
+sys.path.insert(0, "analysis/validation")
 from check_physics import list_targets, settled_cut_rows, binned
 B = pd.concat([binned(r) for p in list_targets([sys.argv[1]]) if (r := settled_cut_rows(pd.read_csv(p))) is not None])
 lo, hi = B[B["V"] < 1.0], B[B["V"] > 2.0]

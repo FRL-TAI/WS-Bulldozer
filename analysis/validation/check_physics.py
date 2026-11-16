@@ -1,10 +1,10 @@
 """
 関門5（物理的な妥当性）の点検。AGX の反力を、土の力学の式（FEE）や力のつり合いと比べる。
 
-置き場所: src/bull_ope/analysis/checks/check_physics.py
+置き場所: analysis/validation/check_physics.py
 使い方:
-  cd /workspaces/ws-bulldozer/src/bull_ope
-  python3 analysis/checks/check_physics.py <collect_data の出力フォルダ、または CSV> [...] [--report 結果.md] [--plot 図.png]
+  cd /workspaces/ws-bulldozer
+  python3 analysis/validation/check_physics.py <collect_data の出力フォルダ、または CSV> [...] [--report 結果.md] [--plot 図.png]
 
 削るエピソード（目標深さが正の走行）について、走行中の行を距離 BIN（既定 0.625 m = 地形のマス2つ分）ごとに平均し、
 地形のマスによる揺れを除いてから、次を調べる。

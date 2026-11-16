@@ -86,10 +86,11 @@
 | 操作 | `operation(obs)` | 各時刻の観測から、速度・目標の深さ・旋回の角速度を返す |
 | 終了条件 | `is_done(obs)` | 既定は走行距離 `MAX_DISTANCE`（10 m）または時間 `TIMEOUT`（60 秒） |
 | 締固めの操作の要否 | クラス属性 `REQUIRES_GRID_CONTROL` | True なら Unity 側の `AGX_GRID_CONTROL` が必要 |
+| 締固めの記録 | クラス属性 `RECORD_COMPACTION` | True なら Unity の `CompactionProbe` が地形の高さと締固めの程度を送り、`<名前>_compaction.csv` に保存する（[README の 3.3](README.md#33-締固めの記録_compactioncsv)） |
 
 | データ構造 | 内容 |
 | --- | --- |
-| `SoilParams` | 土質。`cohesion` [Pa]、`friction_angle_deg` [deg]、`density` [kg/m³]、`swell_factor` [−]、`youngs_modulus` [Pa]。後の2つは None なら Unity 側の値のまま |
+| `SoilParams` | 土質。`cohesion` [Pa]、`friction_angle_deg` [deg]、`density` [kg/m³]、`swell_factor` [−]、`youngs_modulus` [Pa]、`hardening_ke` [−]、`hardening_ne` [−]（硬化の係数・指数）。後の4つは None なら Unity 側の値のまま |
 | `TerrainOp` | 地形の加工。`type`（`compaction_rect` / `loose_layer_rect`）、範囲（`x_start`, `x_end`, `y_min`, `y_max`）、`value`、`depth`。座標は開始時の刃先の中点が原点、x が前方、y が左方 [m] |
 | `Observation` | `operation()` に渡す観測。`t`（走り出してからの時間）、`distance`（開始位置からの距離）、`speed`（前方向の速度。後退で負）、`edge_z`、`ground_h0`、`depth`、`blade`（`blade_state` の最新値の辞書） |
 | `Command` | `operation()` が返す操作。`speed` [m/s]（負で後退）、`depth` [m]（None で排土板を上げる）、`yaw_rate` [rad/s]（正で左旋回、既定 0） |

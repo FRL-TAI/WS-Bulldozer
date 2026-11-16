@@ -33,17 +33,16 @@ T5 が、時刻の列を持たない `joint_states` のずれを測る方法。�
 関門3のデータは一定の速さで走る区間ばかりなので、速度が大きく変わるデータとして `ex_stop_and_go`（3 秒前進・2 秒停止を 20 秒間、0.6 m/s。1回で走り出しと止まりが4回ずつ）を3回記録した。
 
 ```
-cd /workspaces/ws-bulldozer/src/bull_ope
+cd /workspaces/ws-bulldozer
 G3=data/validation/gate3/run_<日時>_gate3
-python3 analysis/checks/check_timing.py $G3 --report $G3/check_timing.md
+python3 analysis/validation/check_timing.py $G3 --report $G3/check_timing.md
 
 cd /workspaces/ws-bulldozer
 ros2 run bull_ope collect_data --episodes ex_stop_and_go --num 3 --seed 0 \
-    --run-name gate4 --out src/bull_ope/data/validation/gate4
-cd src/bull_ope
+    --run-name gate4 --out data/validation/gate4
 G4=data/validation/gate4/run_<日時>_gate4
-python3 analysis/checks/check_gate2.py $G4 --report $G4/check_gate2.md
-python3 analysis/checks/check_timing.py $G4 --report $G4/check_timing.md
+python3 analysis/validation/check_gate2.py $G4 --report $G4/check_gate2.md
+python3 analysis/validation/check_timing.py $G4 --report $G4/check_timing.md
 ```
 
 

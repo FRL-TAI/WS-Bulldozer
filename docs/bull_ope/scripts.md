@@ -38,6 +38,7 @@ ros2 run bull_ope test_episode [エピソード名] [オプション]
 | `--seed` | 0 | 乱数のシード（土質・操作のパラメータが決まる） |
 | `--c`、`--phi`、`--rho` | 乱数 | 粘着力 [Pa]、内部摩擦角 [deg]、密度 [kg/m³]。指定しなかったものは `--seed` から決まる乱数 |
 | `--swell` | Unity 側の値 | 膨張率 [−] |
+| `--ke`、`--ne` | Unity 側の値 | 硬化の係数 KE、指数 NE [−] |
 | `--no-record` | — | CSV に記録しない |
 | `--out` | `<DATA_DIR>/test` | 保存先 |
 
@@ -48,7 +49,7 @@ ros2 run bull_ope test_episode --list
 ros2 run bull_ope test_episode --calibrate                              # 初回に一度（LIFT_SIGN の確認）
 ros2 run bull_ope test_episode dataset_flat_cut --seed 0
 ros2 run bull_ope test_episode dataset_flat_cut --c 30000 --phi 50 --rho 1900   # 最も重い土で試す
-ros2 run bull_ope test_episode val_constant_depth --out src/bull_ope/data/validation/gate3/kp3
+ros2 run bull_ope test_episode val_constant_depth --out data/validation/gate3/kp3
 ```
 
 **走行中の表示**（0.5 秒ごと）
@@ -61,7 +62,7 @@ t=  3.5s  dist= 1.62m  v=0.48m/s  depth=  7.9cm (目標   8.0)  Fx= -12.35kN  Fz
 
 正常に終わった場合、記録した CSV を読み込み、行数（全体と走行中）、記録の周期（平均と最大。50 Hz なら 20 ms）、主な列と「未取得（すべて NaN）」「一定」と判定された列の欠損数・最小・平均・最大、走行中の切削深さの平均と標準偏差を表示する。統計は走行中（`phase == "running"`）の行で計算する。
 
-エラー（`InvalidCommand`、`SafetyStop`、エピソードの例外など）で止まった場合は、トレースバックを表示して終了コード 1 で終わる。CSV はそこまでの分が保存されるので、`analysis/checks/check_recording.py` で点検できる。
+エラー（`InvalidCommand`、`SafetyStop`、エピソードの例外など）で止まった場合は、トレースバックを表示して終了コード 1 で終わる。CSV はそこまでの分が保存されるので、`analysis/validation/check_recording.py` で点検できる。
 
 
 ## 2. collect_data：収集
@@ -84,11 +85,11 @@ ros2 run bull_ope collect_data [オプション]
 ```
 # 検証用：4種類を3回ずつ（関門2）
 ros2 run bull_ope collect_data --episodes val_static val_air_run val_constant_depth val_depth_step \
-    --num 3 --seed 0 --run-name gate2 --out src/bull_ope/data/validation/gate2
+    --num 3 --seed 0 --run-name gate2 --out data/validation/gate2
 
 # 試験的な収集（関門7）
 ros2 run bull_ope collect_data --episodes dataset_flat_cut --num 20 --seed 100 \
-    --run-name pilot_cut --out src/bull_ope/data/pilot
+    --run-name pilot_cut --out data/pilot
 ```
 
 **動作**

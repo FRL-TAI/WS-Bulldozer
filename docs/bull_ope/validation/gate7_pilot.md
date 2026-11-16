@@ -35,27 +35,26 @@ ros2 run bull_ope test_episode dataset_flat_cut --seed 0 --c 30000 --phi 50 --rh
 ros2 run bull_ope test_episode dataset_flat_piecewise --seed 1
 
 # (b) 試験的に収集する
-ros2 run bull_ope collect_data --episodes dataset_flat_cut --num 20 --seed 100 --run-name pilot_cut --out src/bull_ope/data/pilot
-ros2 run bull_ope collect_data --episodes dataset_flat_piecewise --num 10 --seed 101 --run-name pilot_pw --out src/bull_ope/data/pilot
+ros2 run bull_ope collect_data --episodes dataset_flat_cut --num 20 --seed 100 --run-name pilot_cut --out data/pilot
+ros2 run bull_ope collect_data --episodes dataset_flat_piecewise --num 10 --seed 101 --run-name pilot_pw --out data/pilot
 
 # (c) まとめて点検する
-cd src/bull_ope
 PC=data/pilot/run_<日時>_pilot_cut; PW=data/pilot/run_<日時>_pilot_pw
 for d in $PC $PW; do
-  python3 analysis/checks/check_collection.py $d --report $d/check_collection.md
-  python3 analysis/checks/check_recording.py $d/ep[0-9]*.csv --no-label --report $d/check_recording.md
-  python3 analysis/checks/check_gate2.py $d --report $d/check_gate2.md
-  python3 analysis/checks/check_units.py $d --report $d/check_units.md
+  python3 analysis/production/check_collection.py $d --report $d/check_collection.md
+  python3 analysis/validation/check_recording.py $d/ep[0-9]*.csv --no-label --report $d/check_recording.md
+  python3 analysis/validation/check_gate2.py $d --report $d/check_gate2.md
+  python3 analysis/validation/check_units.py $d --report $d/check_units.md
 done
-python3 analysis/checks/check_timing.py $PC $PW --report data/pilot/check_timing.md
-python3 analysis/checks/check_physics.py $PC --report data/pilot/check_physics.md --plot data/pilot/check_physics.png
-python3 analysis/checks/check_dataset.py $PC $PW --target 1000 --report data/pilot/check_dataset.md
+python3 analysis/validation/check_timing.py $PC $PW --report data/pilot/check_timing.md
+python3 analysis/validation/check_physics.py $PC --report data/pilot/check_physics.md --plot data/pilot/check_physics.png
+python3 analysis/production/check_dataset.py $PC $PW --target 1000 --report data/pilot/check_dataset.md
 
 # (d) dataset_pile_push：10 件試し、範囲を狭めて 20 件試す
 cd /workspaces/ws-bulldozer
-ros2 run bull_ope collect_data --episodes dataset_pile_push --num 10 --seed 102 --run-name pilot_pile --out src/bull_ope/data/pilot
+ros2 run bull_ope collect_data --episodes dataset_pile_push --num 10 --seed 102 --run-name pilot_pile --out data/pilot
 #   （pile_push.py の範囲を狭めた後）
-ros2 run bull_ope collect_data --episodes dataset_pile_push --num 20 --seed 103 --run-name pilot_pile2 --out src/bull_ope/data/pilot
+ros2 run bull_ope collect_data --episodes dataset_pile_push --num 20 --seed 103 --run-name pilot_pile2 --out data/pilot
 ```
 
 この関門に合わせて、点検の道具を2か所直した。`check_units.py` は削るエピソードを名前ではなくデータで判断するように、`check_recording.py` は土質が毎回違うデータ用に `--no-label`（ラベルの確認を飛ばす）を追加した。`check_dataset.py` は、D1 結果の内訳、D2 土質の広がり、D3 関門5・6の関係の回帰、D4 本番の見積もりを出す。

@@ -2,10 +2,10 @@
 関門6（再現性と識別可能性）の点検。val_sens_* の結果から、エピソードごとの特徴量を求め、
 同じ条件の繰り返しのばらつき（再現性）と、土質・速度を変えたときの変化（識別可能性）を比べる。
 
-置き場所: src/bull_ope/analysis/checks/check_sensitivity.py（check_physics.py と同じ場所）
+置き場所: analysis/validation/check_sensitivity.py（check_physics.py と同じ場所）
 使い方:
-  cd /workspaces/ws-bulldozer/src/bull_ope
-  python3 analysis/checks/check_sensitivity.py <collect_data の出力フォルダ> [...] [--report 結果.md] [--plot 図.png]
+  cd /workspaces/ws-bulldozer
+  python3 analysis/validation/check_sensitivity.py <collect_data の出力フォルダ> [...] [--report 結果.md] [--plot 図.png]
 
 特徴量（走行中の行を距離 0.625 m ごとに平均してから求める。関門5と同じ）
   kx      前後の力の傾き [kN/m³]（削った体積 V < 1.0 m³ で −F_x = ax + kx V と近似）

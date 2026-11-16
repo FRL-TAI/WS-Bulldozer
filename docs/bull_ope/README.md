@@ -25,27 +25,30 @@
 
 ### 1.2 ファイルの構成
 ```
-src/bull_ope/
-├ bull_ope/                 ROS2 のノード（ビルドしてインストールされる）
-│  ├ apps/                  collect_data.py（収集）、test_episode.py（試走と点検）
-│  ├ core/                  runner.py（1エピソードの手順、指令の確認、安全の確認）
-│  ├ ros/                   sim_interface.py（トピックの送受信、シーンの読み込み直し、速度の計算）
-│  ├ recording/             recorder.py（CSV への記録）、json_utils.py（JSON に書く前の型の変換）
-│  ├ episodes/
-│  │  ├ episode.py          エピソードの基底クラスとデータ構造
-│  │  ├ dataset/            本番の収集で使う学習データ用（名前は dataset_*）
-│  │  ├ sandbox/            試作・旧版・自由度のサンプル集（名前は ex_*）
-│  │  └ validation/
-│  │     ├ data_check/      検証用（val_*、val_sens_*）
-│  │     └ stress/          不具合探し用（stress_*）
-│  └ config.py              設定値
-├ scripts/                  運用のためのスクリプト（インストールされない）
-│  └ run_production.sh      本番の収集
-├ analysis/                 検証の道具（インストールされない）
-│  ├ checks/                点検のスクリプト（check_*.py、inspect_depth.py）
-│  └ scripts/               run_stress_tests.sh（関門1）、dryrun_stress.py
-├ data/                     出力データ（Git の管理外。.gitkeep のみ）
-└ test/                     ament の標準の試験（copyright、flake8、pep257）
+ws-bulldozer/
+├ src/bull_ope/
+│  ├ bull_ope/              ROS2 のノード（ビルドしてインストールされる）
+│  │  ├ apps/               collect_data.py（収集）、test_episode.py（試走と点検）
+│  │  ├ core/               runner.py（1エピソードの手順、指令の確認、安全の確認）
+│  │  ├ ros/                sim_interface.py（トピックの送受信、シーンの読み込み直し、速度の計算）
+│  │  ├ recording/          recorder.py（CSV への記録）、compaction_recorder.py（締固めの記録）、
+│  │  │                     json_utils.py（JSON に書く前の型の変換）
+│  │  ├ episodes/
+│  │  │  ├ episode.py       エピソードの基底クラスとデータ構造
+│  │  │  ├ dataset/         本番の収集で使う学習データ用（名前は dataset_*）
+│  │  │  ├ sandbox/         試作・旧版・自由度のサンプル集（名前は ex_*）
+│  │  │  └ validation/
+│  │  │     ├ data_check/   検証用（val_*、val_sens_*）
+│  │  │     └ stress/       不具合探し用（stress_*）
+│  │  └ config.py           設定値
+│  ├ scripts/               運用のためのスクリプト（インストールされない）
+│  │  └ run_production.sh   本番の収集
+│  └ resource/bull_ope      ament のパッケージの目印（中身は空）
+├ analysis/                 解析・点検のスクリプト（インストールされない。一覧は analysis/README.md）
+│  ├ production/            本番の収集の点検（run_production.sh が使う）
+│  ├ validation/            データ検証の関門1〜7
+│  └ phase0/                フェーズ0（締固め・沈下・較正曲線）
+└ data/                     出力データ（Git の管理外。.gitkeep のみ）
 
 docs/bull_ope/              このドキュメント
 ├ README.md                 この文書（概要、本番の収集、収集データ）
@@ -101,7 +104,7 @@ cd /workspaces/ws-bulldozer
 bash src/bull_ope/scripts/run_production.sh 1 12
 
 # 追加のデータ（dataset_pile_push）：別の出力先に集める
-N_CUT=0 N_PW=0 N_PILE=30 OUT=src/bull_ope/data/production_pile \
+N_CUT=0 N_PW=0 N_PILE=30 OUT=data/production_pile \
     bash src/bull_ope/scripts/run_production.sh 1 3
 ```
 
@@ -112,12 +115,12 @@ N_CUT=0 N_PW=0 N_PILE=30 OUT=src/bull_ope/data/production_pile \
 | `N_CUT` | 60 | 1区切りの `dataset_flat_cut` の件数 |
 | `N_PW` | 30 | 1区切りの `dataset_flat_piecewise` の件数 |
 | `N_PILE` | 0 | 1区切りの `dataset_pile_push` の件数 |
-| `OUT` | `src/bull_ope/data/production` | 出力先 |
+| `OUT` | `data/production` | 出力先 |
 | `SEED_BASE` | 1000 | 区切り k の乱数のシードは `SEED_BASE + 10k`（`dataset_flat_cut`）、`+1`（`dataset_flat_piecewise`）、`+2`（`dataset_pile_push`） |
 
 - 区切りごとにシードが決まっているので、途中で止まった区切りは、同じ番号で実行し直せば同じ計画が再現される。
 - 区切りが終わるたびに `check_collection.py` と `check_dataset.py` が実行され、要約が `<OUT>/production.log` に追記される。「想定外・要確認の項目 : 0 件」が並んでいれば正常。
-- どのフォルダから実行してもよい（スクリプトの場所からパッケージの場所を求める）。
+- どのフォルダから実行してもよい（スクリプトの場所からワークスペースの場所を求める）。
 
 **所要時間と容量の目安（関門7）**
 
@@ -144,6 +147,7 @@ N_CUT=0 N_PW=0 N_PILE=30 OUT=src/bull_ope/data/production_pile \
 | `/d37pxi_24/joint_states` | `sensor_msgs/JointState` | 受信 | 関節（lift / tilt / angle / 左右の履帯）の位置・速度・力（約 39 Hz） |
 | `/d37pxi_24/global_pose` | `nav_msgs/Odometry` | 受信 | 車体の位置・姿勢（約 38 Hz）。速度の欄は OperaSim では 0 のままなので、速度は `bull_ope` が位置の変化から計算する |
 | `/sim/episode_status` | `std_msgs/String`（JSON） | 受信 | Unity の状態（5 Hz と、指令の処理直後）。AGX から読み戻した土質など |
+| `/sim/compaction_probe` | `std_msgs/String`（JSON） | 受信 | 締固めの記録（`RECORD_COMPACTION` のエピソードだけ。[3.3](#33-締固めの記録_compactioncsv)） |
 | `/d37pxi_24/cmd_vel` | `geometry_msgs/Twist` | 送信 | 前進・後退の速度（`linear.x`）と旋回の角速度（`angular.z`） |
 | `/d37pxi_24/blade_cmd` | `com3_msgs/JointCmd` | 送信 | 排土板の速度指令（`control_type = 1`）。OperaSim は配列の順番 [0] lift、[1] tilt、[2] angle で読むので、必ず3要素で送る |
 | `/sim/episode_cmd` | `std_msgs/String`（JSON） | 送信 | Unity への指令（下の表） |
@@ -185,7 +189,7 @@ N_CUT=0 N_PW=0 N_PILE=30 OUT=src/bull_ope/data/production_pile \
 `cohesion`〜`youngs_modulus` は AGX 本体から読み戻した値で、学習データのラベルになる。詳細は Unity 側の `docs/feature/SimEpisodeManager.md`。
 
 ### 3.2 収集データ（時系列データ ep*.csv の列）
-`/d37pxi_24/blade_state` が届くたび（シミュレーション時刻で 20 ms ごと）に1行を書く。ほかのトピックの値は、その時点で届いている最新の値を使う。記録するのは「排土板を下げる → 走る → 上げる」の間で、学習には `phase == "running"` の行を使う。全 89 列。
+`/d37pxi_24/blade_state` が届くたび（シミュレーション時刻で 20 ms ごと）に1行を書く。ほかのトピックの値は、その時点で届いている最新の値を使う。記録するのは「排土板を下げる → 走る → 上げる」の間で、学習には `phase == "running"` の行を使う。全 91 列。
 
 **座標系：** 力・トルク（`F_*`、`T_*`）は車体（`base_link`）に固定した座標で、x：前方、y：左方、z：上方。4つの力の内訳はいずれも「排土板が土から受ける力」の向き（押土中は `F_total_x` が負、`F_total_z` も負＝下向き）。位置と地面の高さはワールド座標（高さは Unity のワールド y と同じ）。
 
@@ -217,6 +221,7 @@ N_CUT=0 N_PW=0 N_PILE=30 OUT=src/bull_ope/data/production_pile \
 | | `cut_volume` | それまでに地山を削った体積 [m³]（`blade_width` × `depth` × 前進速度 × Δt の積算）。`dataset_pile_push` で積んだ山の量は含まない |
 | | `slip_ratio` | 履帯のスリップ率（`SPROCKET_RADIUS` が未設定なので NaN） |
 | ラベル（episode_status） | `label_c`、`label_phi`、`label_rho0`、`label_swell`、`label_E0` | AGX から読み戻した土質（推定の正解） |
+| | `label_KE`、`label_NE` | AGX から読み戻した硬化の係数・指数（締固めのしやすさの設定） |
 
 **学習に使うときの注意**
 
@@ -231,6 +236,42 @@ N_CUT=0 N_PW=0 N_PILE=30 OUT=src/bull_ope/data/production_pile \
 
 出力のフォルダの構成と `episodes.jsonl` の列は [output_data.md](output_data.md) を参照。
 
+### 3.3 締固めの記録（*_compaction.csv）
+クラス属性 `RECORD_COMPACTION` が True のエピソード（現在は `ex_compaction_bands`）では、Unity の `CompactionProbe` が、地形のマスの高さと締固めの程度を `/sim/compaction_probe` に送る。`bull_ope` の `CompactionRecorder`（`recording/compaction_recorder.py`）がそれを受け取り、時系列データの CSV の隣に `<時系列データの名前>_compaction.csv` として保存する。
+
+| 項目 | 内容 |
+| --- | --- |
+| 送る条件 | `setup` の指令で `record_compaction` が true のエピソードの、phase が `lowering` になってから `done` になるまで |
+| 送る間隔 | シミュレーション時刻で 1 秒ごと（Unity 側の `sampleInterval`）。最後に phase が `done` になった時点の記録を `final: true` で送る |
+| メッセージ | `{"request_id": …, "episode_name": …, "final": false, "header": "sim_time,phase,…", "rows": "…\n…\n"}`。`rows` は1回分の記録（CSV の行） |
+| 混ざらない仕組み | `setup` の `request_id` と一致するメッセージだけを保存する（前のエピソードの記録は捨てる） |
+| 閉じ方 | phase を `done` にした後、`final` の記録を最大 3 秒待ってから閉じる。届かなければ注意を表示する。エラーや Ctrl+C で止まったときは待たずに閉じる |
+
+**記録する場所（列）**
+
+開始時（phase が `lowering` になった時点）の `body_link` の位置を原点、前方を x、左方を y とした座標で、前後 −1〜12 m の範囲のマスを記録する。
+
+| 列の名前（`lane`） | 場所 |
+| --- | --- |
+| `track_L±0.00`、`track_R±0.00` | 左右の履帯の走路。履帯の幅（0.6 m）の中に中心が入るマスをすべて記録し、履帯の中心線からのマスの中心の横の位置 [m] を名前に付ける |
+| `center` | 機体の中心線上のマス |
+| `control` | 対照（走路の外、左方 3.5 m）のマス |
+
+**CSV の列**（1行 = 1回の記録の1マス）
+
+| 列 | 内容 |
+| --- | --- |
+| `sim_time`、`phase` | 記録した時刻 [s]、そのときの進行状況 |
+| `machine_x` | 機体（`body_link`）の前後の位置 [m]（上の座標） |
+| `lane`、`lane_y`、`x` | 列の名前、マスの中心の横の位置 [m]、前後の位置 [m] |
+| `unity_ix`、`unity_iy` | Unity の地形のマスの番号 |
+| `height` | 地表の高さ [m]（ワールド座標） |
+| `c_surface` | 地表の締固めの程度（AGX の `getSurfaceCompaction`） |
+| `surface_z` | 地表のボクセルの深さ方向の番号 |
+| `c_z0`〜`c_z5` | 地表のボクセル（`c_z0`）から下へ6つのボクセルの締固めの程度 |
+
+解析は `analysis/phase0/` のスクリプト（`check_compaction.py`、`check_track_settlement.py` など）で行う（[analysis/README.md](../../analysis/README.md)）。
+
 
 ## 4. その他のドキュメント
 - **[エピソード](episodes.md)**
@@ -241,6 +282,7 @@ N_CUT=0 N_PW=0 N_PILE=30 OUT=src/bull_ope/data/production_pile \
   - `test_episode`：1エピソードの試走と点検、排土板の向きの較正
   - `collect_data`：複数のエピソードの収集
 - **[出力データ](output_data.md)**：フォルダの構成、`config.json`、`episodes.jsonl` / `episodes.csv` の列、本番の収集のログ
+- **[解析のスクリプト](../../analysis/README.md)**：`analysis/` のフォルダごとのスクリプトの一覧と用途
 - **[設定（config.py）](config.md)**：各設定値の意味と、その値にした理由
 - **[検証](validation/README.md)**
   - 検証の道具（`check_*.py` などの点検のスクリプト）の解説

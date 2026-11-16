@@ -1,10 +1,10 @@
 """
 段階7（試験的な収集）の点検。学習データとしての使いやすさと、本番の収集の見積もりを出す。
 
-置き場所: src/bull_ope/analysis/checks/check_dataset.py（check_physics.py・check_sensitivity.py と同じ場所）
+置き場所: analysis/production/check_dataset.py（analysis/validation/ の check_sensitivity.py・check_physics.py を使う）
 使い方:
-  cd /workspaces/ws-bulldozer/src/bull_ope
-  python3 analysis/checks/check_dataset.py <collect_data の出力フォルダ> [...] [--target 本番のエピソード数] [--report 結果.md]
+  cd /workspaces/ws-bulldozer
+  python3 analysis/production/check_dataset.py <collect_data の出力フォルダ> [...] [--target 本番のエピソード数] [--report 結果.md]
 
   D1. 結果の内訳      ok / error / skipped の件数。error の理由と、そのときの土質・深さ・速度
   D2. 土質の広がり    ラベル（AGX から読み戻した値）の最小・最大と、範囲を5等分したときの件数（偏りがないか）
@@ -22,7 +22,8 @@ import sys
 import numpy as np
 import pandas as pd
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# check_sensitivity.py（とそれが使う check_physics.py）は analysis/validation/ にある
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "validation"))
 from check_sensitivity import features   # noqa: E402
 
 LABELS = [("label_c", "c [Pa]"), ("label_phi", "φ [°]"), ("label_rho0", "ρ [kg/m³]")]

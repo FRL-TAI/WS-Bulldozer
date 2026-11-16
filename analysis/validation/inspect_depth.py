@@ -1,10 +1,10 @@
 """
 関門3の U3（深さの追従）・U4（刃先と地面）・U9（記録の最初の状態）の WARN を調べる。
 
-置き場所: src/bull_ope/analysis/checks/inspect_depth.py
+置き場所: analysis/validation/inspect_depth.py
 使い方:
-  cd /workspaces/ws-bulldozer/src/bull_ope
-  python3 analysis/checks/inspect_depth.py <CSV> [<CSV> …] [--plot]
+  cd /workspaces/ws-bulldozer
+  python3 analysis/validation/inspect_depth.py <CSV> [<CSV> …] [--plot]
 
 各 CSV について次を表示する。--plot を付けると、CSV と同じ場所に <CSV名>_depth.png を保存する
 （matplotlib が必要。ない場合は pip install matplotlib）。

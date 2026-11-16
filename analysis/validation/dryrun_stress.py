@@ -1,11 +1,11 @@
 """
 Unity なしで、runner.py の流れ（正常終了・エラー・安全停止）と記録を通してみる（疑似実行）
 
-置き場所: src/bull_ope/analysis/scripts/dryrun_stress.py
+置き場所: analysis/validation/dryrun_stress.py
 使い方:
-  cd /workspaces/ws-bulldozer/src/bull_ope
-  python3 analysis/scripts/dryrun_stress.py                  # stress_* をすべて
-  python3 analysis/scripts/dryrun_stress.py stress_nan_depth  # 指定したものだけ
+  cd /workspaces/ws-bulldozer
+  python3 analysis/validation/dryrun_stress.py                  # stress_* をすべて
+  python3 analysis/validation/dryrun_stress.py stress_nan_depth  # 指定したものだけ
 
 疑似の SimInterface は「指令どおりに動くだけの機体」で、物理（反力・転倒）は再現しない。
 確かめられるのは、例外の種類と記録の流れ（CSV が閉じる、episodes.jsonl に1行ずつ書ける、
@@ -18,7 +18,8 @@ import os
 import sys
 import tempfile
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+# bull_ope パッケージ（src/bull_ope/bull_ope）を import できるようにする
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src", "bull_ope")))
 
 from bull_ope import config as C                                  # noqa: E402
 from bull_ope.core.runner import EpisodeRunner, SkipEpisode       # noqa: E402
@@ -34,6 +35,7 @@ class FakeIface:
     def __init__(self):
         self.t = 100.0
         self.blade_listeners = []
+        self.probe_listeners = []                  # CompactionRecorder が登録する（疑似実行では何も送らない）
         self.cmd_vx = self.cmd_wz = self.cmd_lift = 0.0
         self.sent_nonfinite = 0                    # NaN・無限大が送られようとした回数
         self.status = {"boot_id": 1, "grid_control_enabled": True}
@@ -104,6 +106,9 @@ class FakeIface:
 
 
 def main():
+    if any(a in ("-h", "--help") for a in sys.argv[1:]):
+        print(__doc__)
+        return
     registry = available_episodes()
     names = sys.argv[1:] or [n for n in registry if n.startswith("stress_")]
     out = tempfile.mkdtemp(prefix="dryrun_")
