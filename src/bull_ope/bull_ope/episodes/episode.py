@@ -24,6 +24,8 @@ class SoilParams:
     density: float                          # 地山の密度 ρ0 [kg/m^3]
     swell_factor: Optional[float] = None    # 膨張率 [-]. None なら Unity 側の値のまま
     youngs_modulus: Optional[float] = None  # ヤング率 E0 [Pa]. None なら Unity 側の値のまま
+    hardening_ke: Optional[float] = None    # 硬化の係数 KE [-]. None なら Unity 側の値のまま
+    hardening_ne: Optional[float] = None    # 硬化の指数 NE [-]. None なら Unity 側の値のまま
 
     def to_msg_dict(self) -> dict:
         # Unity 側では負の値を「変更しない」と解釈する

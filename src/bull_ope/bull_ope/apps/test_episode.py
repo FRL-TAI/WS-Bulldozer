@@ -105,6 +105,8 @@ def main():
     ap.add_argument("--phi", type=float, help="内部摩擦角 [deg]")
     ap.add_argument("--rho", type=float, help="密度 [kg/m^3]")
     ap.add_argument("--swell", type=float, help="膨張率 [-]")
+    ap.add_argument("--ke", type=float, help="硬化の係数 KE（指定しなければ Unity 側の値）")
+    ap.add_argument("--ne", type=float, help="硬化の指数 NE（指定しなければ Unity 側の値）")
     ap.add_argument("--no-record", action="store_true")
     ap.add_argument("--out", default=os.path.join(C.DATA_DIR, "test"))
     a = ap.parse_args()
@@ -132,12 +134,12 @@ def main():
 
         cls = registry[a.episode]
         soil = None
-        if any(v is not None for v in (a.c, a.phi, a.rho, a.swell)):
+        if any(v is not None for v in (a.c, a.phi, a.rho, a.swell, a.ke, a.ne)):
             base = cls.sample_soil(np.random.default_rng(a.seed))
             soil = SoilParams(cohesion=a.c if a.c is not None else base.cohesion,
-                              friction_angle_deg=a.phi if a.phi is not None else base.friction_angle_deg,
-                              density=a.rho if a.rho is not None else base.density,
-                              swell_factor=a.swell)
+                            friction_angle_deg=a.phi if a.phi is not None else base.friction_angle_deg,
+                            density=a.rho if a.rho is not None else base.density,
+                            swell_factor=a.swell, hardening_ke=a.ke, hardening_ne=a.ne)
         ep = cls(seed=a.seed, soil=soil)
         print(f"エピソード: {ep.name}  seed={ep.seed}")
         print(f"土質: {ep.soil}")

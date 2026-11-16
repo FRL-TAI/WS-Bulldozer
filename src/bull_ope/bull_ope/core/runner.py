@@ -132,6 +132,10 @@ class EpisodeRunner:
             got = st.get(key)
             if got is None or abs(got - want) > tol + 1e-6 * abs(want):
                 raise RuntimeError(f"{key} が反映されていません（要求 {want}, AGX {got}）")
+        for key in ("hardening_ke", "hardening_ne"):
+            want = getattr(s, key)
+            if want is not None:
+                checks.append((key, want, 1e-6))
 
     # ----- 本体 -----
     def run(self, episode, index, total, csv_path=None, on_tick=None):
@@ -166,6 +170,8 @@ class EpisodeRunner:
             "label_rho0": st.get("density"),
             "label_swell": st.get("swell_factor"),
             "label_E0": st.get("youngs_modulus"),
+            "label_KE": st.get("hardening_ke"),
+            "label_NE": st.get("hardening_ne"),
         }
         meta = {"episode_index": index, "episode_name": episode.name, "seed": episode.seed}
 
