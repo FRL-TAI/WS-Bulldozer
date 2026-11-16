@@ -469,6 +469,11 @@ def fig06(d, out):
     save(fig, out, "fig06_calibration_and_cut.png")
     res = {f"S {cc_:.2f}": f"{s:.1f}" for cc_, s in zip(c, S)}
     res.update({f"ratio {k:.2f}": f"{np.mean(v):.2f}" for k, v in lv.items()})
+    pos = defaultdict(list)
+    for r in read_csv(A("cut_levels", "effects.csv")):
+        pos[(r["band"], round(fl(r["level"]), 2))].append(fl(r["R_sep_N_ratio"]))
+    for band in ("1", "3"):
+        res[f"ratio band{band}"] = ", ".join(f"{l:.2f}:{np.mean(pos[(b, l)]):.2f}" for b, l in sorted(pos) if b == band)
     return res
 
 
@@ -566,38 +571,53 @@ def fig08(d, out):
 
 
 # ---------------------------------------------------------------- 図9
+BAND_POS = {"1": "Band 1 (3–5 m)", "3": "Band 3 (7–9 m)"}   # 締め固めた帯の位置（刃先の開始位置から）
+
+
 def hardening_ratios(d, cond):
-    """各帯の比抵抗 ÷ 同じ記録の帯2・4（地山）の比抵抗の平均（docs/phase0.md §3.4 の表の定義）"""
+    """各帯の比抵抗 ÷ 同じ記録の帯2・4（地山）の比抵抗の平均（docs/phase0.md §3.4 の表の定義）。
+    戻り値：(程度ごとの比, 地山の比抵抗の平均, 帯2・4 の w, {(帯の番号, 程度): [(比, w), ...]})"""
     rows = read_csv(A(f"hardening_{cond}", "cut_bands", "bands.csv"))
     byf = defaultdict(list)
     for r in rows:
         byf[r["file"]].append(r)
-    ratios, bank, bank_w = defaultdict(list), [], []
+    ratios, bank, bank_w, by_pos = defaultdict(list), [], [], defaultdict(list)
     for rs in byf.values():
         ref = statistics.mean(fl(r["specific_kPa"]) for r in rs if r["band"] in ("2", "4"))
         bank.append(ref)
         bank_w += [fl(r["state_c"]) for r in rs if r["band"] in ("2", "4")]
         for r in rs:
             if r["band"] in ("1", "3"):
-                ratios[round(fl(r["level"]), 2)].append(fl(r["specific_kPa"]) / ref)
-    return dict(sorted(ratios.items())), statistics.mean(bank), bank_w
+                lv = round(fl(r["level"]), 2)
+                ratios[lv].append(fl(r["specific_kPa"]) / ref)
+                by_pos[(r["band"], lv)].append((fl(r["specific_kPa"]) / ref, fl(r["state_c"])))
+    return dict(sorted(ratios.items())), statistics.mean(bank), bank_w, dict(by_pos)
 
 
 def fig09(d, out):
-    fig, ax = plt.subplots(figsize=(6.0, 3.9))
+    fig, axs = plt.subplots(1, 2, figsize=(9.0, 3.9), sharey=True)
     res = {}
     for k, (cond, label, col) in enumerate(HARDENING):
-        rat, bank, _ = hardening_ratios(d, cond)
-        off = (k - 1) * 0.008
-        for lv, v in rat.items():
-            ax.scatter([lv + off] * len(v), v, s=12, color=col, alpha=0.45, edgecolors="none")
-        ax.plot([lv + off for lv in rat], [np.mean(v) for v in rat.values()], color=col, marker="o",
-                label=f"{label}; undisturbed {bank:.0f} kPa")
+        rat, bank, _, by_pos = hardening_ratios(d, cond)
         res[cond] = ", ".join(f"{lv:.2f}:{np.mean(v):.2f}" for lv, v in rat.items()) + f"; bank {bank:.1f} kPa"
-    ax.axhline(1, color=INK2, lw=0.8, ls="--")
-    ax.set(xlabel="Degree of compaction of the band [-]", ylabel="Specific cutting resistance ratio [-]",
-           title="Cutting resistance by hardening setting\n(ratio to undisturbed bands 2 and 4 of the same run)")
-    ax.legend(fontsize=7.5, loc="upper left")
+        off = (k - 1) * 0.008
+        for ax, band in zip(axs, ("1", "3")):
+            lv = sorted(l for b, l in by_pos if b == band)
+            v = [[x[0] for x in by_pos[(band, l)]] for l in lv]
+            for l, vv in zip(lv, v):
+                ax.scatter([l + off] * len(vv), vv, s=12, color=col, alpha=0.45, edgecolors="none")
+            ax.plot([l + off for l in lv], [np.mean(vv) for vv in v], color=col, marker="o",
+                    label=f"{label}; undisturbed {bank:.0f} kPa")
+            res[f"{cond} band{band}"] = ", ".join(
+                f"{l:.2f}:{np.mean([x[0] for x in by_pos[(band, l)]]):.2f}"
+                f"(w {'/'.join(f'{x[1]:.3f}' for x in by_pos[(band, l)])})" for l in lv)
+    for ax, band in zip(axs, ("1", "3")):
+        ax.axhline(1, color=INK2, lw=0.8, ls="--")
+        ax.set(xlabel="Degree of compaction of the band [-]", title=f"({'ab'[band == '3']}) Compacted band at {BAND_POS[band]}")
+    axs[0].set_ylabel("Specific cutting resistance ratio [-]")
+    axs[0].legend(fontsize=7.5, loc="upper left")
+    note(axs[1], "Ratio to undisturbed bands 2 and 4 of the same run;\none dot per run (1.16: 2 runs, others: 1 run)",
+         "upper left")
     fig.tight_layout()
     save(fig, out, "fig09_hardening_cut.png")
     return res
@@ -700,7 +720,11 @@ def check_edge_layer_w(d, blade_offset=2.8, trim=0.5):
             times = sorted(tb)
             first = {r["_cell"]: r for r in tb[times[0]]}
             mx = {t: tb[t][0]["_mx"] if "_mx" in tb[t][0] else fl(tb[t][0]["machine_x"]) for t in times}
-            for band, (a, b) in (("2", (5.0, 7.0)), ("4", (9.0, 11.0))):
+            lv_of = {}   # この記録の帯1・3 の締固めの程度（check_cut_bands.py の bands.csv から）
+            for r in read_csv(A(f"hardening_{cond}", "cut_bands", "bands.csv")):
+                if r["file"] == os.path.basename(p).replace("_compaction.csv", ".csv") and r["band"] in ("1", "3"):
+                    lv_of[r["band"]] = round(fl(r["level"]), 2)
+            for band, (a, b) in (("1", (3.0, 5.0)), ("2", (5.0, 7.0)), ("3", (7.0, 9.0)), ("4", (9.0, 11.0))):
                 lo, hi = a + trim + blade_offset, b - trim + blade_offset     # 締固めの記録の x（機体の基準点が原点）
                 for cell, r0 in first.items():
                     if r0["_group"] not in ("track_L", "track_R", "center") or not lo <= r0["_x"] <= hi:
@@ -714,7 +738,12 @@ def check_edge_layer_w(d, blade_offset=2.8, trim=0.5):
                     h_edge = r0["_h"] - depth
                     k = math.floor(r["_h"] / 0.3125 + 0.5) - math.floor(h_edge / 0.3125 + 0.5)
                     if 0 <= k < len(cols):
-                        w[band].append(cc.to_float(r[cols[k]]))
+                        key = band if band in ("2", "4") else f"{band}@{lv_of.get(band, math.nan):.2f}"
+                        w[key].append(cc.to_float(r[cols[k]]))
+        for key in sorted(k for k in w if "@" in k):
+            v = np.array(w[key])
+            res[f"{cond} compacted band{key} edge-layer w (probe)"] = (
+                f"mean {v.mean():.4f}, min {v.min():.4f}, max {v.max():.4f}, share<1 {np.mean(v < 0.9995) * 100:.0f}% (n={len(v)} cells)")
         for band in ("2", "4"):
             v, s_ = np.array(w[band]), np.array(st[band])
             res[f"{cond} band{band} edge-layer w (probe)"] = (
