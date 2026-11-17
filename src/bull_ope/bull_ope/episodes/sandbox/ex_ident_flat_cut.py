@@ -1,0 +1,58 @@
+"""
+【フェーズ1：同定可能性】基準の土質から1つのパラメータだけをずらして、平らな地面を一定の深さで削るエピソード
+
+深さ 9 cm・0.5 m/s・10 m（関門6 の val_sens_base と同じ操作）。土質は「下限 = 上限」で固定する。
+基準は dirt_1（c 2100 Pa、φ 39.98°、ρ 1474 kg/m³、膨張率 1.28）。
+ヤコビ行列を差分で求めるために、パラメータごとの点（基準からのずれ）を POINTS に並べる。
+エピソード名は ex_ident_flat_cut_<点の名前>（例：ex_ident_flat_cut_base、ex_ident_flat_cut_phi_m5）。
+
+点を足すときは POINTS に1行足す（例：c の片側差分 "c_p1500": {"cohesion": 3600.0}）。
+刻みの決め方は notes の decisions/2026-11-17_差分の刻みと基準の点.md、docs/phase1.md §5。
+"""
+from ..episode import Command, Episode
+
+# 基準の土質（OperaSim の TerrainMaterial（dirt_1）の設定値。膨張率はシーンの asset の値）
+BASE_SOIL = {"cohesion": 2100.0, "friction_angle_deg": 39.98, "density": 1474.0, "swell_factor": 1.28}
+
+# 点の名前 → 基準から変えるもの（SoilParams のフィールド名 → 値）
+POINTS = {
+    "base": {},
+    "phi_m5": {"friction_angle_deg": 34.98},      # φ − 5°（範囲の幅 25° の −20%）
+    "phi_p5": {"friction_angle_deg": 44.98},      # φ + 5°
+    "phi_p2p5": {"friction_angle_deg": 42.48},    # φ + 2.5°（線形性の確認）
+}
+
+
+class _IdentFlatCut(Episode):
+    """共通部分（name がないので一覧には出ない）"""
+    DEPTH = 0.09          # 切削深さ [m]
+    SPEED = 0.5           # 前進速度 [m/s]
+    MAX_DISTANCE = 10.0   # 走行距離 [m]
+    TIMEOUT = 90.0        # 走行時間の上限 [s]
+    POINT = "base"
+
+    def sample_params(self, rng):
+        return {"depth": self.DEPTH, "speed": self.SPEED, "max_distance": self.MAX_DISTANCE, "point": self.POINT}
+
+    def operation(self, obs):
+        return Command(speed=self.SPEED, depth=self.DEPTH)
+
+
+def _make(key, change):
+    soil = dict(BASE_SOIL)
+    soil.update(change)
+    desc = "、".join(f"{k}={v:g}" for k, v in change.items()) or "基準（dirt_1）"
+    attrs = {
+        "__module__": __name__,
+        "__doc__": f"同定可能性の flat_cut：{desc}",
+        "name": f"ex_ident_flat_cut_{key}",
+        "description": f"【同定可能性】深さ 9 cm で 10 m 削る（{desc}）",
+        "SOIL_RANGES": {k: (v, v) for k, v in soil.items()},   # 下限 = 上限 で固定
+        "POINT": key,
+    }
+    return type(f"IdentFlatCut_{key}", (_IdentFlatCut,), attrs)
+
+
+for _key, _change in POINTS.items():
+    _cls = _make(_key, _change)
+    globals()[_cls.__name__] = _cls

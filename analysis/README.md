@@ -14,6 +14,7 @@ python3 analysis/<フォルダ>/<スクリプト> --help
 | [production/](#production本番の収集の点検) | 本番の収集の点検（`src/bull_ope/scripts/run_production.sh` が使う） |
 | [validation/](#validationデータ検証の関門17) | データ検証の関門1〜7 |
 | [phase0/](#phase0フェーズ0締固め沈下較正曲線) | 卒研のフェーズ0（締固め・沈下・較正曲線） |
+| [phase1/](#phase1フェーズ1同定可能性) | 卒研のフェーズ1（同定可能性） |
 
 
 ## production/：本番の収集の点検
@@ -62,3 +63,18 @@ python3 analysis/phase0/plot_figures.py --skip-analysis --only 6 7   # 解析の
 ```
 
 各スクリプトを個別に実行するときのコマンドは `RECOLLECT_PLAN.md` の 4 にある。
+
+## phase1/：フェーズ1（同定可能性）
+基準の土質から1つのパラメータだけをずらしたシミュレーションから、ヤコビ行列とフィッシャー情報を求める。前提は notes の `docs/phase1.md`。記録は `ex_ident_flat_cut_*`（`collect_data` で集める。出力は `data/phase1/`）。
+
+| スクリプト | 内容 | 使った場面 |
+| --- | --- | --- |
+| `check_pilot_phi.py` | φ だけの小さな試験（基準・φ ±5°・+2.5°）の解析。基準の雑音（Σ の係数）、Fx_sat の差と必要な回数、30 成分（−F_x・−F_z、0.625 m ごと）と段差の前の 20 成分のフィッシャー情報、線形性、関門6 との比較、貫入抵抗の段差が合計の力に残るか | φ の試験（T4） |
+
+```
+ros2 run bull_ope collect_data --episodes ex_ident_flat_cut_base ex_ident_flat_cut_phi_m5 ex_ident_flat_cut_phi_p5 \
+    ex_ident_flat_cut_phi_p2p5 --num 10 --sampling uniform --out data/phase1/pilot_phi --run-name pilot_phi
+python3 analysis/phase1/check_pilot_phi.py data/phase1/pilot_phi/run_*_pilot_phi \
+    --gate6 'data/validation/gate6/run_*' --report data/phase1/pilot_phi/check_pilot_phi.md
+```
+
