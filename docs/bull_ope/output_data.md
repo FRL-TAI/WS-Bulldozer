@@ -94,7 +94,7 @@ episodes.jsonl の要約（running 中に値があったステップだけで集
 | --- | --- | --- |
 | `front_soil_mass` | `getSoilAggregateMass(shovel, PRIMARY)` | 土塊（soil aggregate）の質量 [kg]。破壊領域で押しのけようとしている土と、inner shape の中の動く土 |
 | `front_soil_mass_deform` | `getSoilAggregateMass(shovel, DEFORM_BACK/RIGHT/LEFT)` の和 | 押しのけ・横への変形の土塊の質量 [kg]。このシーンの前進では常に 0 |
-| `front_dynamic_mass` | `getDynamicMass(shovel)` | inner shape の中の動く土（粒子と fluid mass）の質量 [kg] |
+| `front_dynamic_mass` | `getDynamicMass(shovel)` | ショベルまわりの動く土（粒子と fluid mass）の質量 [kg]。inner shape の中だけではない：T15 の確認では、`front_inner_volume` × `front_dead_load_fraction` × 粒子の密度の 2.5〜2.8 倍で、排土板のすぐ前（上端〜刃先の前 0.5 m）の粒子の 0.78〜1.00 倍（中央値 約 0.92）、地形全体の動く土の 0.68〜0.89 倍だった |
 | `front_inner_volume` | `getInnerVolume(shovel)` | inner shape の体積 [m³]。排土板の形で決まり、一定（0.301 m³） |
 | `front_dead_load_fraction` | `getLastDeadLoadFraction(shovel)` | inner shape のうち動く土で埋まっている割合 [-] |
 | `excavated_volume_step` | `getLastExcavatedVolume()` | 直前のステップに地形全体で掘削された体積 [m³] |
