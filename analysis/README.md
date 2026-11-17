@@ -70,6 +70,7 @@ python3 analysis/phase0/plot_figures.py --skip-analysis --only 6 7   # 解析の
 | スクリプト | 内容 | 使った場面 |
 | --- | --- | --- |
 | `check_pilot_phi.py` | φ だけの小さな試験（基準・φ ±5°・+2.5°）の解析。基準の雑音（Σ の係数）、Fx_sat の差と必要な回数、30 成分（−F_x・−F_z、0.625 m ごと）と段差の前の 20 成分のフィッシャー情報、線形性、関門6 との比較、貫入抵抗の段差が合計の力に残るか | φ の試験（T4） |
+| `check_ident.py` | 同定可能性（力の経路）。φ・c・ρ の J の列（φ・ρ は中心差分、c は2次の片側差分、範囲の幅で正規化）、30 成分の χ² 検定と雑音の水増し、3×3 のフィッシャー情報行列と推定標準偏差の下限（範囲比）、グラム行列の条件数、線形性、φ の試験・関門6 との比較 | flat_cut の φ・c・ρ（T7） |
 
 ```
 ros2 run bull_ope collect_data --episodes ex_ident_flat_cut_base ex_ident_flat_cut_phi_m5 ex_ident_flat_cut_phi_p5 \
@@ -78,3 +79,8 @@ python3 analysis/phase1/check_pilot_phi.py data/phase1/pilot_phi/run_*_pilot_phi
     --gate6 'data/validation/gate6/run_*' --report data/phase1/pilot_phi/check_pilot_phi.md
 ```
 
+```
+# flat_cut の φ・c・ρ（基準 15、φ ±10°・+5° 各 15、c 2点 各 3、ρ 3点 各 6）
+python3 analysis/phase1/check_ident.py 'data/phase1/flat_cut/run_*' --pilot 'data/phase1/pilot_phi/run_*' \
+    --gate6 'data/validation/gate6/run_*' --report data/phase1/flat_cut/check_ident.md
+```
