@@ -51,6 +51,8 @@ def episode_files(paths, prefix):
     out = []
     for p in paths:
         for d in sorted(glob.glob(p)):
+            if not os.path.exists(os.path.join(d, "episodes.jsonl")):
+                continue   # 収集が始まる前に止まった run（config.json だけ）は読み飛ばす
             with open(os.path.join(d, "episodes.jsonl"), encoding="utf-8") as f:
                 for line in f:
                     r = json.loads(line) if line.strip() else None
