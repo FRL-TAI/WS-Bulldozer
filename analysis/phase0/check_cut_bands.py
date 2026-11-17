@@ -26,7 +26,7 @@ test_episode が記録した CSV（<DATA_DIR>/test/<日時>_ex_compaction_bands.
   R_sep = −F_sep_x（分離抵抗、押土中に支配的）、R_pen = −F_pen_x（貫入抵抗）、R_total = −F_total_x
 
 出力：
-  1. 帯ごとの表       帯の内側（両端から --trim [m] を除く）の平均。比切削抵抗 = R_sep ÷（排土板の幅 × 深さ）[kPa]
+  1. 帯ごとの表       帯の内側（両端から --trim [m] を除く）の平均。比抵抗 = R_sep ÷（排土板の幅 × 深さ）[kPa]
   2. 隣の地山との比較 締固めた帯の値 − 両隣の地山の帯の値の平均（土塊の成長による増え方の影響を打ち消すため）
   3. 回帰             R_sep = b0 + b1·深さ + b2·V + b3·V² + Σ g_k·[帯の種類 k]（V は削った体積の積算）
                       g_k が「地山と比べた、その締固めの程度による切削抵抗の差」[N]
@@ -349,7 +349,7 @@ def print_file_report(path, rows, cut, bands, source, stats, effects, reg, trim)
 
     print("\n1. 帯ごとの表（帯の内側の平均。state_c は記録の締固めの程度で、設定値との確認用）")
     print(f"{'帯':>3s} {'範囲 [m]':>13s} {'種類':>18s} {'行数':>5s} {'state_c':>8s} {'深さcm':>7s} "
-          f"{'R_sep kN':>9s} {'R_pen kN':>9s} {'R_tot kN':>9s} {'比切削kPa':>10s} {'V m3':>6s}")
+          f"{'R_sep kN':>9s} {'R_pen kN':>9s} {'R_tot kN':>9s} {'比抵抗kPa':>10s} {'V m3':>6s}")
     for s in stats:
         if s.get("n", 0) == 0:
             print(f"{s['band']:3d} {s['s0']:6.2f}-{s['s1']:5.2f} {s['label']:>18s} {0:5d}  （刃先が通っていない）")
@@ -365,7 +365,7 @@ def print_file_report(path, rows, cut, bands, source, stats, effects, reg, trim)
         print(f"   帯 {e['band']}（{e['label']}、地山 {e['n_neighbors']} 帯と比較）："
               f"R_sep {e['R_sep_N_diff'] / 1000:+.2f} kN（比 {e['R_sep_N_ratio']:.3f}）、"
               f"R_pen {e['R_pen_N_diff'] / 1000:+.2f} kN（比 {e['R_pen_N_ratio']:.3f}）、"
-              f"比切削 {e['specific_kPa_diff']:+.2f} kPa（比 {e['specific_kPa_ratio']:.3f}）、"
+              f"比抵抗 {e['specific_kPa_diff']:+.2f} kPa（比 {e['specific_kPa_ratio']:.3f}）、"
               f"深さ {e['depth_m_diff'] * 100:+.2f} cm")
 
     print("\n3. 回帰 R_sep = b0 + b1·深さ + b2·V + b3·V² + Σ g·[帯の種類]（帯の種類の係数が地山との差 [N]）")
@@ -386,7 +386,7 @@ def print_summary(all_effects):
     groups = defaultdict(list)
     for e in all_effects:
         groups[e["label"]].append(e)
-    print(f"{'種類':>18s} {'数':>3s} {'R_sep 差 kN':>16s} {'R_sep 比':>15s} {'R_pen 比':>15s} {'比切削 比':>15s}")
+    print(f"{'種類':>18s} {'数':>3s} {'R_sep 差 kN':>16s} {'R_sep 比':>15s} {'R_pen 比':>15s} {'比抵抗 比':>15s}")
     for lv in sorted(groups, key=lambda k: (groups[k][0]["level"], k)):
         es = groups[lv]
 
