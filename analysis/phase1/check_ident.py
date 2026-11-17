@@ -107,6 +107,67 @@ def load_task(paths, prefix=PREFIX, bins=BINS, max_dev=None, skip=(), params=Non
                 kappa=kappa, d=d, nb=nb, J=J, infl=infl, excluded=excluded, names=names)
 
 
+def noise_check(T, names, nsplit=400, nboot=500, seed=0):
+    """κ を使わない水増しの見積もりと、信号（水増しを引いた F）のばらつき（T20）。
+
+    - κ 法（今の方法）：水増し = d · Σ_k w_k² κ_k / n_k。κ_k·d = tr(Σ⁻¹ S_k)（S_k は点 k の不偏の標本共分散）なので、
+      これは「平均の2乗から対角（同じエピソードどうしの積）を除く」不偏推定（U 統計量）と同じである。
+    - 半分割り法：点ごとに記録を2つに分け（ランダムに nsplit 回）、J_A・J_B を求める。
+        水増し ≈ E[(J_A − J_B)ᵀΣ⁻¹(J_A − J_B)] × Σ w²/n ÷ Σ w²(1/n_A + 1/n_B)（点ごとの tr が同じと仮定）
+        信号 ≈ E[J_Aᵀ Σ⁻¹ J_B]（雑音が独立なので、水増しを使わない不偏推定）
+      行列にも同じことをして、交差項の信号の行列 M_ij = E[(J_A,iᵀΣ⁻¹J_B,j + J_B,iᵀΣ⁻¹J_A,j)/2] を作る。
+    - ブートストラップ：点ごとにエピソードを選び直して、κ 法の信号（F − 水増し）の標準偏差を求める。
+    戻り値：パラメータごとの dict と、行列の最小の固有値"""
+    rng = np.random.default_rng(seed)
+    X, nrep, Sinv, d = T["X"], T["nrep"], T["Sinv"], T["d"]
+    W = {n: DESIGN[n][1] for n in names}
+    res = {}
+    JA_all, JB_all = [], []
+    infl_split = {n: [] for n in names}
+    for _ in range(nsplit):
+        A, B = {}, {}
+        for k in {k for n in names for k in W[n]}:
+            idx = rng.permutation(len(X[k]))
+            h = len(idx) // 2
+            A[k], B[k] = X[k][idx[:h]].mean(axis=0), X[k][idx[h:]].mean(axis=0)
+            A[k + "#n"], B[k + "#n"] = h, len(idx) - h
+        JA = {n: sum(wt * A[k] for k, wt in W[n].items()) for n in names}
+        JB = {n: sum(wt * B[k] for k, wt in W[n].items()) for n in names}
+        JA_all.append(np.column_stack([JA[n] for n in names]))
+        JB_all.append(np.column_stack([JB[n] for n in names]))
+        for n in names:
+            D = JA[n] - JB[n]
+            num = sum(wt ** 2 / nrep[k] for k, wt in W[n].items())
+            den = sum(wt ** 2 * (1 / A[k + "#n"] + 1 / B[k + "#n"]) for k, wt in W[n].items())
+            infl_split[n].append(float(D @ Sinv @ D) * num / den)
+    JA_all, JB_all = np.array(JA_all), np.array(JB_all)
+    cross = np.mean([(a.T @ Sinv @ b + b.T @ Sinv @ a) / 2 for a, b in zip(JA_all, JB_all)], axis=0)
+    # ブートストラップ（κ 法の信号のばらつき）
+    boot = {n: [] for n in names}
+    for _ in range(nboot):
+        Xb = {k: X[k][rng.integers(0, len(X[k]), len(X[k]))] for k in X}
+        for n in names:
+            J = sum(wt * Xb[k].mean(axis=0) for k, wt in W[n].items())
+            v = 0.0
+            for k, wt in W[n].items():
+                r = Xb[k] - Xb[k].mean(axis=0)
+                nk = len(Xb[k])
+                tr = float(np.mean([x @ Sinv @ x for x in r])) * nk / (nk - 1)   # tr(Σ⁻¹S)
+                v += wt ** 2 * tr / nk
+            boot[n].append(float(J @ Sinv @ J) - v)
+    Jm = np.column_stack([T["J"][n] for n in names])
+    F = Jm.T @ Sinv @ Jm
+    for i, n in enumerate(names):
+        res[n] = dict(F=float(F[i, i]), infl_k=T["infl"][n], infl_s=float(np.mean(infl_split[n])),
+                      sig_k=float(F[i, i] - T["infl"][n]), sig_cross=float(cross[i, i]),
+                      sig_sd=float(np.std(boot[n], ddof=1)))
+    Fk = F - np.diag([T["infl"][n] for n in names])
+    Fs = F - np.diag([res[n]["infl_s"] for n in names])
+    ev = dict(kappa=float(np.linalg.eigvalsh(Fk).min()), split=float(np.linalg.eigvalsh(Fs).min()),
+              cross=float(np.linalg.eigvalsh(cross).min()))
+    return res, ev, cross
+
+
 def main():
     ap = argparse.ArgumentParser(description="同定可能性（力の経路）の解析")
     ap.add_argument("paths", nargs="+", help="collect_data の出力フォルダ（glob 可）")
@@ -120,6 +181,8 @@ def main():
     ap.add_argument("--gate6", nargs="*", default=[], help="関門6 の出力フォルダ（phi25/phi50 との比較。flat_cut のときだけ）")
     ap.add_argument("--params", nargs="+", choices=list(DESIGN), help="使うパラメータ（既定は DESIGN のすべて）")
     ap.add_argument("--s-step", type=float, default=0.06, choices=sorted(S_DESIGNS), help="膨張率の中心差分の刻み（既定 0.06）")
+    ap.add_argument("--noise-check", action="store_true",
+                    help="κ を使わない水増しの見積もり（半分割り）と信号のばらつきを足す（T20。既定では出さない）")
     ap.add_argument("--report", help="結果を Markdown で保存するファイル")
     a = ap.parse_args()
     set_s_step(a.s_step)
@@ -317,6 +380,22 @@ def main():
             fs10 = (np.mean([e["Fx_sat"] for e in pts["phi_p10"]]) - np.mean([e["Fx_sat"] for e in pts["phi_m10"]])) / 20
             p(f"- Fx_sat の傾き：±10° {fs10:.3f} kN/°、関門6（25° の差）{(f50.mean() - f25.mean()) / 25:.3f} kN/°")
     p("")
+
+    # ---- 補足：κ を使わない水増しの見積もり（--noise-check）
+    if a.noise_check:
+        nres, nev, _ = noise_check(T, names)
+        p("## 補足. 水増しの見積もりの確認（T20）\n")
+        p("κ 法（今の方法）は、点ごとの標本共分散による不偏推定（U 統計量）と同じ。半分割り法は、点ごとに記録を2つに分けた J_A・J_B の差から水増しを、"
+          "積 J_Aᵀ Σ⁻¹ J_B から信号を求める（ランダムに 400 回分けた平均）。信号の標準偏差は、点ごとにエピソードを選び直すブートストラップ（500 回）。\n")
+        p("| パラメータ | F（そのまま） | 水増し：κ 法 / 半分割り | 水増し ÷ F：κ 法 / 半分割り | 信号：κ 法 ± 標準偏差 / 半分割りの積 | 下限 σ/範囲：κ 法 / 半分割り / 積 |")
+        p("|---|---|---|---|---|---|")
+        for n in names:
+            r = nres[n]
+            sig_s = r["F"] - r["infl_s"]
+            lb = lambda x: (1 / math.sqrt(x)) if x > 0 else math.nan
+            p(f"| {n} | {r['F']:.1f} | {r['infl_k']:.1f} / {r['infl_s']:.1f} | {r['infl_k'] / r['F']:.2f} / {r['infl_s'] / r['F']:.2f} | "
+              f"{r['sig_k']:.1f} ± {r['sig_sd']:.1f} / {r['sig_cross']:.1f} | {lb(r['sig_k']):.3f} / {lb(sig_s):.3f} / {lb(r['sig_cross']):.3f} |")
+        p(f"\n水増しを引いた F の最小の固有値：κ 法 {nev['kappa']:.1f}、半分割り {nev['split']:.1f}、交差項の信号の行列 {nev['cross']:.1f}\n")
 
     # ---- 7. 判定
     p("## 7. 止める条件の判定\n")
