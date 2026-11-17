@@ -189,7 +189,7 @@ N_CUT=0 N_PW=0 N_PILE=30 OUT=data/production_pile \
 `cohesion`〜`youngs_modulus` は AGX 本体から読み戻した値で、学習データのラベルになる。詳細は Unity 側の `docs/feature/SimEpisodeManager.md`。
 
 ### 3.2 収集データ（時系列データ ep*.csv の列）
-`/d37pxi_24/blade_state` が届くたび（シミュレーション時刻で 20 ms ごと）に1行を書く。ほかのトピックの値は、その時点で届いている最新の値を使う。記録するのは「排土板を下げる → 走る → 上げる」の間で、学習には `phase == "running"` の行を使う。全 100 列。
+`/d37pxi_24/blade_state` が届くたび（シミュレーション時刻で 20 ms ごと）に1行を書く。ほかのトピックの値は、その時点で届いている最新の値を使う。記録するのは「排土板を下げる → 走る → 上げる」の間で、学習には `phase == "running"` の行を使う。全 118 列。
 
 **座標系：** 力・トルク（`F_*`、`T_*`）は車体（`base_link`）に固定した座標で、x：前方、y：左方、z：上方。4つの力の内訳はいずれも「排土板が土から受ける力」の向き（押土中は `F_total_x` が負、`F_total_z` も負＝下向き）。位置と地面の高さはワールド座標（高さは Unity のワールド y と同じ）。
 
@@ -211,6 +211,7 @@ N_CUT=0 N_PW=0 N_PILE=30 OUT=data/production_pile \
 | | `ground_ahead`、`ground_profile_025cm`〜`200cm` | 刃先から 0.5 m 前方、および 25 cm ごとに 8 点の前方の地面の高さ [m] |
 | 土の状態（blade_state） | `state_compaction_mean/std/n` | 刃先の前 1 m・排土板の幅の範囲の、地表の締固めの程度の平均・標準偏差・マスの数 |
 | | `front_soil_mass`、`front_soil_mass_deform`、`front_dynamic_mass`、`front_inner_volume`、`front_dead_load_fraction`、`excavated_volume_step` | 排土板の前の土塊・動く土の質量 [kg]、inner shape の体積と埋まっている割合、直前のステップの掘削体積 [m³]（AGX の API。中身と注意は output_data.md の「排土板の前の土の質量・掘削体積の列」。足す前の記録では NaN） |
+| | `pile_*`、`dyn_*`、`bal_*` | 土の山の体積 V_pile（地形の高さ ＋ 粒子 ÷ (ρ/s)）とその内訳・感度用の範囲、地形全体の動く土、収支の確認用の窓の体積（T15。中身は output_data.md の「土の山の体積の列」） |
 | 関節（joint_states） | `lift_joint_pos/vel/effort` など | 排土板の上げ下げ・チルト・アングル、左右の履帯の位置・速度・力。履帯の力は N·m（起動輪の半径 約 0.352 m で割ると駆動力 [N]）。`lift_joint_effort` は上下の力 `F_total_z` と相関 0.98 |
 | 車体（global_pose） | `x`、`y`、`z`、`roll`、`pitch`、`yaw`、`pose_stamp` | 車体の位置 [m]・姿勢 [rad]、位置が更新された時刻 [s] |
 | 車体の速度（bull_ope が計算） | `vx`、`vy`、`vz`、`wz`、`v_forward`、`v_lateral` | 位置の変化を 0.1 秒の幅で求めた速度。`v_forward` は前方向（後退で負） |

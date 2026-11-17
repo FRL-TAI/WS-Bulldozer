@@ -105,8 +105,35 @@ episodes.jsonl の要約（running 中に値があったステップだけで集
 - `excavated_volume_step` は、ほとんどのステップで 0 で、ときどき大きな値が入る（積算は階段状）。積算は flat_cut で `cut_volume` の約 2 倍、pile_push で約 8 倍になる。地形に戻った土をもう一度掘削した分も数えるためと考えられ、削った地山の体積の代わりには使えない。
 - 土の山の量としては、引き続き `cut_volume`（地山を削った体積の積算。頭打ちの前だけ）を使う。`front_soil_mass` を使うかは、notes の docs/phase1.md §4.1 で決める。
 
+### 土の山の体積の列（T15）
+時系列データの次の列は、Unity の `PileVolume.cs`（`BladeStatePublisher.cs` から毎ステップ呼ぶ）が求める。定義は notes の decisions/2026-11-17_土の山の体積の定義と入力の決め方.md。この列を足す前の記録にはない。
+
+V_pile = Σ（範囲内のマス）max(h − h0, 0)·A ＋ M_dyn ÷ (ρ/s)
+
+- h：AGX の地形の高さ（`Terrain.getHeight`）。h0：シーンを読み込んだ直後の高さ（エピソードごとに読み込み直すので、開始時の地表。pile_push の山を積む前）。
+- 範囲：刃先の中点を原点に、水平の前方は「排土板の上端の水平位置（`pile_back_offset`、刃先の後ろ約 0.33 m）」から刃先の前 2.0 m まで、横は ±1.48 m。マス（0.3125 m）の中心が範囲に入るものを数える。
+- M_dyn：範囲内のマスに位置がある粒子の質量。fluid mass は、2.37 にボクセルごとに種類を指定して読む関数がないため含めない（地形全体でも 0〜1.4 kg）。
+- ρ/s：その時点の density ÷ swellFactor（dirt_1 で 1,151.6 kg/m³）。
+
+| 列 | 中身 |
+| --- | --- |
+| `pile_volume` | V_pile [m³] |
+| `pile_vol_terrain`、`pile_vol_dynamic` | その内訳：地形の分 Σ max(h − h0, 0)·A、動く土の分 M_dyn ÷ (ρ/s) [m³] |
+| `pile_mass_particle` | 範囲内の粒子の質量 M_dyn [kg] |
+| `pile_volume_front150`、`pile_volume_front250` | 前を 1.5 m・2.5 m にした V_pile [m³]（感度用） |
+| `pile_volume_wide`、`pile_volume_ridge` | 横に1マスずつ広げた V_pile、広げた分（範囲の外側1マス＝横の畝）だけの体積 [m³] |
+| `pile_vol_terrain_setup` | h0 の代わりに setup（地形の加工）の後の高さを使った地形の分 [m³]。pile_push で `pile_vol_terrain` との差が、まだ触れていない山の分 |
+| `pile_back_offset` | 刃先から排土板の上端までの水平距離 [m]（範囲の後ろの端） |
+| `pile_bulk_density` | 換算に使った ρ/s [kg/m³] |
+| `dyn_mass_particle_near` | 上端〜刃先の前 0.5 m・±1.48 m の粒子の質量 [kg]（参考） |
+| `dyn_mass_particle_total`、`dyn_mass_fluid_total`、`dyn_mass_total`、`dyn_num_particles` | 地形全体の粒子の質量、fluid mass（`calculateTotalFluidMass`）、動く土の合計（`calculateTotalDynamicMass`。粒子 ＋ fluid に一致）[kg]、粒子の数 |
+| `bal_vol_pos`、`bal_vol_neg` | 刃先の後ろ 16 m〜前 3 m・±3 m の窓での Σ max(h − h0, 0)·A、Σ min(h − h0, 0)·A [m³]（収支の確認用） |
+
+- `bal_*` は 25 ステップ（0.5 s）ごとに求め、間は前の値を出す。地形全体の質量（`calculateTotalMass`）も一時は出していたが、1回に約 0.3 s かかって Unity が止まり、深さの制御が乱れた（深さのずれの 95% 点が 2〜4 cm → 9〜19 cm）ので外した。
+- 解析は `analysis/phase1/check_pile_volume.py`。
+
 ## 3. 大きさの目安（関門7）
 | 項目 | 値 |
 | --- | --- |
-| 時系列データ 1 ファイル | 約 2.3 MB（約 1,500 行 × 89 列。関門7 の時点。現在は 100 列） |
+| 時系列データ 1 ファイル | 約 2.3 MB（約 1,500 行 × 89 列。関門7 の時点。現在は 118 列） |
 | 1,000 エピソード | 約 2.3 GB |
