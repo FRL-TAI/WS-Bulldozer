@@ -9,6 +9,10 @@
   1. 記録の周期        2. 時刻の単調性・重複   3. 欠損 ( NaN ) 
   4. 一定の列          5. ラベル              6. 進行状況の順番     7. 走行時間
 
+欠損では、削っていない行 ( state_cut_compaction_n が 0 ) の state_cut_compaction_mean/min/max の NaN は
+想定どおりとする。あとから足した列 ( NEW_COLS ) がない記録、front_soil_mass・excavated_volume_step が
+全行 NaN の記録は「旧形式」と表示し、NG にしない ( 一定の列の判定からも外す ) 。
+
 エラーで途中終了したエピソードの CSV も点検できる ( 途中で切れていないか、NaN がないかの確認 ) 
 """
 import argparse
@@ -25,6 +29,18 @@ GAP_LIMIT = 0.050            # これより長い間隔を「取りこぼし」�
 # 今は NaN で正常な列 ( 設定値がないと計算しない ) 
 # front_soil_mass・excavated_volume_step は AGX の API で取るようにしたので外した（それより前の記録では NaN になる）
 EXPECTED_NAN = {"state_compaction_mean", "state_compaction_std", "slip_ratio"}
+
+# 削っていない行 ( 削っている層のマスがない行。CUT_N_COL == 0 ) だけ NaN で正常な列
+# 削っている行 ( CUT_N_COL > 0 ) の NaN は、今までどおり想定外とする
+CUT_NAN_COLS = {"state_cut_compaction_mean", "state_cut_compaction_min", "state_cut_compaction_max"}
+CUT_N_COL = "state_cut_compaction_n"
+
+# あとから足した列。古い記録では列がない ( 旧形式 ) 
+NEW_COLS = ["label_maxDensity",                                                # T13
+            "front_soil_mass", "front_soil_mass_deform", "front_dynamic_mass",  # T14
+            "front_inner_volume", "front_dead_load_fraction", "excavated_volume_step"]
+# T14 より前の記録では、列はあるが全行 NaN ( 旧形式 ) 。一部の行だけ NaN なら想定外
+OLD_ALL_NAN_COLS = {"front_soil_mass", "excavated_volume_step"}
 
 # エピソード中に一定で正常な列
 EXPECTED_CONST_PREFIX = ("label_",)
@@ -70,10 +86,30 @@ def check_file(path, soil):
     # 3. 欠損 ( 数値の列のみ ) 
     num = df.select_dtypes(include=[np.number])
     nan_cols = {c: int(num[c].isna().sum()) for c in num.columns if num[c].isna().any()}
-    unexpected = {c: n for c, n in nan_cols.items() if c not in EXPECTED_NAN}
-    expected = sorted(c for c in nan_cols if c in EXPECTED_NAN)
+    old_missing = [c for c in NEW_COLS if c not in df]                          # 旧形式 ( 列なし ) 
+    old_all_nan = [c for c in NEW_COLS
+                   if c in OLD_ALL_NAN_COLS and c in nan_cols and nan_cols[c] == len(df)]  # 旧形式 ( 全行 NaN ) 
+    not_cutting = (df[CUT_N_COL] == 0) if CUT_N_COL in df else pd.Series(False, index=df.index)
+    unexpected, expected = {}, []
+    for c, n in nan_cols.items():
+        if c in EXPECTED_NAN:
+            expected.append(c)
+        elif c in old_all_nan:
+            continue
+        elif c in CUT_NAN_COLS:
+            n_cut = int((num[c].isna() & ~not_cutting).sum())      # 削っている行の NaN だけ数える
+            if n_cut:
+                unexpected[c] = n_cut
+            else:
+                expected.append(f"{c}(削っていない {n}行)")
+        else:
+            unexpected[c] = n
     detail = "想定外の NaN: " + (", ".join(f"{c}({n}行)" for c, n in unexpected.items()) or "なし")
-    detail += " / 想定どおりの NaN: " + (", ".join(expected) or "なし")
+    detail += " / 想定どおりの NaN: " + (", ".join(sorted(expected)) or "なし")
+    if old_missing:
+        detail += " / 旧形式（列なし）: " + ", ".join(old_missing)
+    if old_all_nan:
+        detail += " / 旧形式（全行 NaN）: " + ", ".join(old_all_nan)
     res.append(("欠損", "OK" if not unexpected else "NG", detail))
 
     # 4. 一定の列 ( 走行中のみで判定。走行中の行がなければ判定しない ) 
@@ -84,7 +120,7 @@ def check_file(path, soil):
         const = [c for c in run.columns
                  if run[c].nunique(dropna=False) <= 1
                  and c not in EXPECTED_CONST and not c.startswith(EXPECTED_CONST_PREFIX)
-                 and c not in EXPECTED_NAN]
+                 and c not in EXPECTED_NAN and c not in old_all_nan]
         res.append(("一定の列 ( 走行中 ) ", "OK" if not const else "WARN",
                     "想定外に一定: " + (", ".join(const) or "なし")))
 

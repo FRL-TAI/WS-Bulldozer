@@ -38,7 +38,7 @@ python3 analysis/<フォルダ>/<スクリプト> <出力フォルダ> --report 
 | スクリプト | 使った関門 | 調べること | 判定 |
 | --- | --- | --- | --- |
 | `production/check_collection.py` | 1〜7 | エピソードの結果（ok / error / skipped）が想定どおりか、開始位置・向きのばらつき（許容 2 cm、0.5°）、ラベルと要求した土質の一致、時系列データの行数・NaN | 想定外・要確認の件数 |
-| `validation/check_recording.py` | 1〜3、7 | CSV ごとに、記録の周期（50 Hz）、時刻の逆戻り・重複、想定外の NaN、走行中に一定の列、ラベル（既定で dirt_1 と比べる。`--no-label` で飛ばす）、進行状況の順番、走行時間 | OK / WARN / NG |
+| `validation/check_recording.py` | 1〜3、7 | CSV ごとに、記録の周期（50 Hz）、時刻の逆戻り・重複、想定外の NaN（削っていない行の `state_cut_compaction_mean/min/max` は想定どおり。あとから足した列がない記録や、`front_soil_mass`・`excavated_volume_step` が全行 NaN の記録は「旧形式」と表示し NG にしない）、走行中に一定の列、ラベル（既定で dirt_1 と比べる。`--no-label` で飛ばす）、進行状況の順番、走行時間 | OK / WARN / NG |
 | `validation/check_gate2.py` | 2〜7 | G1 列の構成、G2 行数の一致、G3 メタ情報の一致、G4 時刻の整合、G5 トピックの更新（同じ値の連続・遅れ）、G6 区間の長さ、G7 繰り返しの差 | OK / WARN / NG |
 | `validation/check_units.py` | 3、7 | U1 空中の力、U2 押土の力の向き、U3 深さの追従、U4 刃先と削った後の地面、U5 速度と距離、U6 座標の整合、U7 値の範囲、U8 力の内訳（参考）、U9 記録の最初の状態（参考） | OK / WARN / NG / 参考 |
 | `validation/inspect_depth.py` | 3 | 深さのずれの揺れ方（周期、ピッチとの相関）、刃先と地面の高さの関係、下げる区間。`--plot` で図を保存 | 判定なし |
