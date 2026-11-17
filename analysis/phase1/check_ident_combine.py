@@ -25,7 +25,7 @@ import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from check_ident import DESIGN, load_task   # noqa: E402
+from check_ident import DESIGN, S_DESIGNS, load_task, set_s_step   # noqa: E402
 
 WS = os.path.abspath(os.path.join(HERE, "..", ".."))
 # 作業 → (エピソード名の頭, 区切りの範囲, 除く深さのずれ [m], 記録の glob, 除く区切り)
@@ -70,8 +70,10 @@ def main():
                     help="作業の区切りの範囲を変える（例 --bins flat_piecewise 1 22）")
     ap.add_argument("--boot", type=int, default=1000)
     ap.add_argument("--params", nargs="+", choices=list(DESIGN), help="使うパラメータ（既定は DESIGN のすべて）")
+    ap.add_argument("--s-step", type=float, default=0.06, choices=sorted(S_DESIGNS), help="膨張率の中心差分の刻み（既定 0.06）")
     ap.add_argument("--report")
     a = ap.parse_args()
+    set_s_step(a.s_step)
     global NAMES
     NAMES = list(a.params) if a.params else list(DESIGN)
     pairs = pairs_of(NAMES)
