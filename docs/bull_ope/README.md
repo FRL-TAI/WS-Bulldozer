@@ -222,6 +222,7 @@ N_CUT=0 N_PW=0 N_PILE=30 OUT=data/production_pile \
 | | `slip_ratio` | 履帯のスリップ率（`SPROCKET_RADIUS` が未設定なので NaN） |
 | ラベル（episode_status） | `label_c`、`label_phi`、`label_rho0`、`label_swell`、`label_E0` | AGX から読み戻した土質（推定の正解） |
 | | `label_KE`、`label_NE` | AGX から読み戻した硬化の係数・指数（締固めのしやすさの設定） |
+| | `label_maxDensity` | AGX から読み戻した締固めの上限の密度 [kg/m³]。(2000/1474)·ρ（上限の程度はどの ρ でも約 1.357）。この列を足す前の記録にはない（2,000 で一定） |
 
 **学習に使うときの注意**
 

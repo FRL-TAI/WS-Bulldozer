@@ -10,8 +10,11 @@ notes の decisions/2026-11-17_maxDensityをρに比例させる.md（maxDensity
 ρ 以外の土質は dirt_1（BASE_SOIL）。maxDensity 2,578 = 1.357 × 1,900（1.357 = 2000/1474、今の dirt_1 の maxDensity/ρ）。
 
 maxDensity の上書きは、SoilParams に max_density を足した MaxDensitySoilParams で Unity に送る
-（Unity の SimEpisodeManager.SoilSpec.max_density。負なら変更しない）。runner の読み戻しの確認（_check_soil）は
-max_density を見ないので、Unity の /sim/episode_status の max_density と、Console の [MaterialReadout] の行で確かめる。
+（Unity の SimEpisodeManager.SoilSpec.max_density）。T13 で Unity の ApplySoil は、上書きがなければ
+maxDensity = (2000/1474)·ρ にするようになった（案D）。runner の読み戻しの確認（_check_soil）は、上書きがあればその値、
+なければ config.MAX_DENSITY_PER_DENSITY × ρ と比べる。
+
+【T13】ex_maxdens_flat_cut_auto：ρ 1,900 で上書きをせず、Unity が maxDensity を 2000/1474 × 1,900 ≈ 2,578 にするかを確かめる。
 """
 from dataclasses import asdict, dataclass
 from typing import Optional
@@ -67,6 +70,13 @@ class MaxDensFlatCut2578(_MaxDensityMixin, _IdentFlatCut):
     SOIL_RANGES = _soil(density=RHO_HIGH)
     MAX_DENSITY = 2578.0
     POINT = "rho1900_md2578"
+
+
+class MaxDensFlatCutAuto(_IdentFlatCut):
+    name = "ex_maxdens_flat_cut_auto"
+    description = "【T13】ρ 1,900・maxDensity は上書きせず（Unity の案D で 2000/1474·ρ）、深さ 9 cm で 10 m 削る"
+    SOIL_RANGES = _soil(density=RHO_HIGH)
+    POINT = "rho1900_auto"
 
 
 # ---- (b) 履帯で4往復、ρ 1,900、maxDensity 2,000・2,578 ----

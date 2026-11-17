@@ -138,6 +138,10 @@ class EpisodeRunner:
             checks.append(("hardening_ke", s.hardening_ke, 1e-6))
         if s.hardening_ne is not None:
             checks.append(("hardening_ne", s.hardening_ne, 1e-6))
+        # maxDensity は、上書き（実験用の max_density）がなければ Unity が MAX_DENSITY_PER_DENSITY × ρ にする（案D）
+        max_density = getattr(s, "max_density", None)
+        checks.append(("max_density", max_density if max_density is not None
+                       else C.MAX_DENSITY_PER_DENSITY * s.density, 0.5))
         for key, want, tol in checks:
             got = st.get(key)
             if got is None or abs(got - want) > tol + 1e-6 * abs(want):
@@ -178,6 +182,7 @@ class EpisodeRunner:
             "label_E0": st.get("youngs_modulus"),
             "label_KE": st.get("hardening_ke"),
             "label_NE": st.get("hardening_ne"),
+            "label_maxDensity": st.get("max_density"),
         }
         meta = {"episode_index": index, "episode_name": episode.name, "seed": episode.seed}
 

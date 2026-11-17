@@ -33,6 +33,11 @@ LOWER_TOLERANCE = 0.01   # 下げ終わりとみなす刃先高さの誤差 [m]
 RAISE_HEIGHT = 0.3       # 走行後に排土板を上げる高さ（元の地面から）[m]
 RAISE_TIME = 3.0
 
+# ---------------- 土質 ----------------
+# Unity の ApplySoil は maxDensity を MAX_DENSITY_PER_DENSITY × ρ にする（SimEpisodeManager.MaxDensityPerDensity と同じ値）。
+# 締固めの程度の上限はどの ρ でも この値（dirt_1 の 2000/1474 ≈ 1.357）。固定のパラメータ（notes decisions/2026-11-17_maxDensityをρに比例させる.md）
+MAX_DENSITY_PER_DENSITY = 2000.0 / 1474.0
+
 # ---------------- 派生量の計算 ----------------
 TRACK_JOINTS = ("right_track", "left_track")
 SPROCKET_RADIUS = None   # 起動輪の半径 [m]。分かったら設定するとスリップ率を計算する

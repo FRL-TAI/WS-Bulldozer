@@ -51,6 +51,7 @@ run_<日時>_<実行名>/
 | `record_compaction` | 締固めを記録するエピソードか（`RECORD_COMPACTION`） |
 | `ground_h0` | 切削深さの基準とした地面の高さ [m] |
 | `label_c`、`label_phi`、`label_rho0`、`label_swell`、`label_E0`、`label_KE`、`label_NE` | AGX から読み戻した土質（ラベル） |
+| `label_maxDensity` | AGX から読み戻した締固めの上限の密度 maxDensity [kg/m³]。Unity は (2000/1474)·ρ にする（締固めの程度の上限はどの ρ でも約 1.357。`config.MAX_DENSITY_PER_DENSITY`）。この列を足す前の記録にはない（そのときの maxDensity は、上書きしたエピソードを除きシーンの 2,000 で一定） |
 | `start_x`、`start_y`、`start_yaw_deg` | 開始時の車体の位置 [m] と向き [deg]（毎回同じ状態から始まっているかの確認用） |
 | `run_time`、`run_distance` | 走行時間 [s] と走行距離 [m] |
 | `raise_depth_over_max` | 上げる区間で実際の深さが `MAX_ACTUAL_DEPTH` を超えた場合の最大値 [m]。超えなければ `null` |
