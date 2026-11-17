@@ -16,6 +16,8 @@
   φ：中心差分 (F(+10°) − F(−10°)) / (20°/25°)
   c：中心差分 (F(+1.5 kPa) − F(−1.5 kPa)) / (3/30)（参考に T7 の2次の片側差分と片側の傾きも並べる）
   ρ：中心差分 (F(+70) − F(−70)) / (140/700)
+  s：中心差分 (F(+0.03) − F(−0.03)) / (0.06/0.30)（膨張率。T17）
+--params で使うパラメータを選べる（既定は DESIGN のすべて。s の点がない記録では --params φ c ρ）。
 点 k の雑音は基準の Σ の κ_k 倍とみなす（κ_k は点ごとの分散の倍率。点の平均からのずれの Mahalanobis の2乗から求める）。
 J̃ の雑音の共分散は (Σ_k w_k² κ_k / n_k) Σ なので、J̃ᵀΣ⁻¹J̃ は期待値で d · Σ_k w_k² κ_k/n_k だけ水増しされる（d は成分の数）。
 χ² = J̃ᵀΣ⁻¹J̃ / (Σ_k w_k² κ_k/n_k) は、効果がなければ自由度 d の χ² に従う。
@@ -41,6 +43,8 @@ DESIGN = {
     "φ": (25.0, {"phi_p10": 1 / 0.8, "phi_m10": -1 / 0.8}, ("phi_p5", "base", "phi_p10")),
     "c": (30.0, {"c_p1p5": 1 / 0.1, "c_m1p5": -1 / 0.1}, ("base", "c_m1p5", "c_p1p5")),
     "ρ": (700.0, {"rho_p70": 1 / 0.2, "rho_m70": -1 / 0.2}, ("rho_p35", "base", "rho_p70")),
+    # 膨張率：中心差分 ±0.03（範囲 1.10〜1.40 の幅 0.30 の ±10%）、線形性は +0.015（T17）
+    "s": (0.30, {"s_p0p03": 1 / 0.2, "s_m0p03": -1 / 0.2}, ("s_p0p015", "base", "s_p0p03")),
 }
 # 参考に並べる c の差分（decisions/2026-11-17_cは中心差分±1.5kPaにする.md）
 C_REFERENCE = {
@@ -50,9 +54,11 @@ C_REFERENCE = {
 STEP_DEG = {"φ": 20.0, "ρ": 140.0}   # 中心差分の両端の差（元の単位）。傾きの比較用
 
 
-def load_task(paths, prefix=PREFIX, bins=BINS, max_dev=None, skip=()):
+def load_task(paths, prefix=PREFIX, bins=BINS, max_dev=None, skip=(), params=None):
     """作業1つの記録を読み、点ごとの観測ベクトル・基準の Σ・点ごとの分散の倍率 κ・J の列を求める。
-    max_dev を指定すると、深さのずれの 95% 点がそれを超える記録を除く（pile_push の潜り）"""
+    max_dev を指定すると、深さのずれの 95% 点がそれを超える記録を除く（pile_push の潜り）。
+    params は使うパラメータ（DESIGN の名前）。None なら DESIGN のすべて"""
+    names = list(params) if params else list(DESIGN)
     bins = [b for b in bins if b not in set(skip)]
     eps = collect(episode_files(paths, prefix), bins)
     excluded = {}
@@ -63,7 +69,7 @@ def load_task(paths, prefix=PREFIX, bins=BINS, max_dev=None, skip=()):
             eps[k] = keep
     pts = {k[len(prefix):]: v for k, v in eps.items() if v}
     nrep = {k: len(v) for k, v in sorted(pts.items())}
-    need = {k for _, w, lin in DESIGN.values() for k in list(w) + list(lin or [])}
+    need = {k for n in names for k in list(DESIGN[n][1]) + list(DESIGN[n][2] or [])}
     missing = sorted(need - set(pts))
     if missing:
         raise SystemExit(f"{prefix}：記録のない点：{missing}")
@@ -83,11 +89,12 @@ def load_task(paths, prefix=PREFIX, bins=BINS, max_dev=None, skip=()):
         r = x - x.mean(axis=0)
         kappa[k] = float(np.mean([v @ Sinv @ v for v in r])) / (d * (len(x) - 1) / len(x)) if len(x) > 1 else math.nan
     J, infl = {}, {}
-    for name, (_, w, _) in DESIGN.items():
+    for name in names:
+        w = DESIGN[name][1]
         J[name] = sum(wt * mean[k] for k, wt in w.items())
         infl[name] = d * sum(wt ** 2 * kappa[k] / nrep[k] for k, wt in w.items())
     return dict(prefix=prefix, bins=bins, pts=pts, nrep=nrep, X=X, mean=mean, co=co, S=S, Sinv=Sinv,
-                kappa=kappa, d=d, nb=nb, J=J, infl=infl, excluded=excluded)
+                kappa=kappa, d=d, nb=nb, J=J, infl=infl, excluded=excluded, names=names)
 
 
 def main():
@@ -101,13 +108,15 @@ def main():
     ap.add_argument("--max-dev", type=float, help="深さのずれの 95%% 点がこれ [m] を超える記録を除く（pile_push は 0.10）")
     ap.add_argument("--pilot", nargs="*", default=[], help="φ の試験の出力フォルダ（±5° との比較。flat_cut のときだけ）")
     ap.add_argument("--gate6", nargs="*", default=[], help="関門6 の出力フォルダ（phi25/phi50 との比較。flat_cut のときだけ）")
+    ap.add_argument("--params", nargs="+", choices=list(DESIGN), help="使うパラメータ（既定は DESIGN のすべて）")
     ap.add_argument("--report", help="結果を Markdown で保存するファイル")
     a = ap.parse_args()
 
     out = []
     p = out.append
     bins = list(range(a.bins[0], a.bins[1] + 1))
-    T = load_task(a.paths, a.prefix, bins, a.max_dev, a.skip)
+    T = load_task(a.paths, a.prefix, bins, a.max_dev, a.skip, a.params)
+    names = T["names"]
     bins = T["bins"]
     pts, nrep, X, mean, co, S, Sinv, kappa, d, nb = (T[k] for k in ("pts", "nrep", "X", "mean", "co", "S", "Sinv", "kappa", "d", "nb"))
     BINS_ = bins
@@ -148,7 +157,7 @@ def main():
     p("|---|---|---|---|---|---|---|---|---|")
     J, infl, flags = {}, {}, []
     rows_ref = [(f"c 参考：{lab}", w) for lab, w in C_REFERENCE.items() if all(k in mean for k in w)]
-    for name, w in [(n, dw[1]) for n, dw in DESIGN.items()] + rows_ref:
+    for name, w in [(n, DESIGN[n][1]) for n in names] + rows_ref:
         Jv = sum(wt * mean[k] for k, wt in w.items())
         v = sum(wt ** 2 * kappa[k] / nrep[k] for k, wt in w.items())   # J̃ の雑音の倍率（κ を見込む）
         F_raw = float(Jv @ Sinv @ Jv)
@@ -157,7 +166,7 @@ def main():
         chi2 = F_raw / v
         pv = float(stats.chi2.sf(chi2, d))
         frac = bias / F_raw
-        if name not in DESIGN:      # 参考の行：表に出すだけ（cos は中心差分の J と比べる）
+        if name not in names:       # 参考の行：表に出すだけ（cos は中心差分の J と比べる）
             cos = float(Jv @ Sinv @ J["c"]) / math.sqrt(F_raw * float(J["c"] @ Sinv @ J["c"]))
             p(f"| {name}（中心差分との cos {cos:.2f}、長さの比 {math.sqrt(F_raw / float(J['c'] @ Sinv @ J['c'])):.2f}） | {chi2:.1f} | {pv:.2g} | {F_raw:.1f} | {bias:.1f} | {F_sig:.1f} | {frac:.2f} | "
               f"{1 / math.sqrt(F_raw):.3f} | {(1 / math.sqrt(F_sig)) if F_sig > 0 else math.nan:.3f} |")
@@ -165,8 +174,8 @@ def main():
         J[name], infl[name] = Jv, bias
         p(f"| {name} | {chi2:.1f} | {pv:.2g} | {F_raw:.1f} | {bias:.1f} | {F_sig:.1f} | {frac:.2f} | "
           f"{1 / math.sqrt(F_raw):.3f} | {(1 / math.sqrt(F_sig)) if F_sig > 0 else math.nan:.3f} |")
-        # flat_cut（T8）は c だけ、ほかの作業（T9）はすべてのパラメータで見る
-        if (name == "c" or a.prefix != PREFIX) and (pv >= 0.05 or frac > 0.5):
+        # flat_cut（T8）は c と s（T17）だけ、ほかの作業（T9）はすべてのパラメータで見る
+        if (name in ("c", "s") or a.prefix != PREFIX) and (pv >= 0.05 or frac > 0.5):
             # 回数を k 倍にすると水増しは 1/k、信号（水増しを引いた F）は変わらない。
             # 水増し ÷ F ≤ 0.5 ⇔ 水増し/k ≤ 信号 ⇔ k ≥ 水増し ÷ 信号
             k_frac = bias / F_sig if F_sig > 0 else math.inf
@@ -174,12 +183,13 @@ def main():
                          f"（{', '.join(f'{k} {math.ceil(nrep[k] * k_frac)}' for k in w)} 回）")
     p("")
 
-    # ---- 3. 3×3 のフィッシャー情報行列
-    names = list(DESIGN)
+    # ---- 3. フィッシャー情報行列
     Jm = np.column_stack([J[n] for n in names])
     F = Jm.T @ Sinv @ Jm
     F_sig = F - np.diag([infl[n] for n in names])
-    p("## 3. φ・c・ρ のフィッシャー情報行列（範囲で正規化、1 エピソードの観測）\n")
+    pairs = [(i, j) for i in range(len(names)) for j in range(i + 1, len(names))]
+    pair_lab = [f"{names[i]}–{names[j]}" for i, j in pairs]
+    p(f"## 3. {'・'.join(names)} のフィッシャー情報行列（範囲で正規化、1 エピソードの観測）\n")
     for label, M in (("そのまま", F), ("対角から水増しを引いた値", F_sig)):
         p(f"**{label}**\n")
         p("| | " + " | ".join(names) + " |")
@@ -191,12 +201,12 @@ def main():
             sd = np.sqrt(np.diag(Minv))
             corr = Minv / np.outer(sd, sd)
             ev = np.linalg.eigvalsh(M)
-            p("\n| パラメータ | 推定標準偏差の下限 σ/範囲（3つ同時） | 1つだけのとき | 比（同時 ÷ 1つ） |")
+            p(f"\n| パラメータ | 推定標準偏差の下限 σ/範囲（{len(names)}つ同時） | 1つだけのとき | 比（同時 ÷ 1つ） |")
             p("|---|---|---|---|")
             for i, n in enumerate(names):
                 single = 1 / math.sqrt(M[i, i]) if M[i, i] > 0 else math.nan
                 p(f"| {n} | {sd[i]:.3f} | {single:.3f} | {sd[i] / single:.2f} |")
-            p(f"\n推定値の相関：φ–c {corr[0, 1]:+.2f}、φ–ρ {corr[0, 2]:+.2f}、c–ρ {corr[1, 2]:+.2f}。"
+            p(f"\n推定値の相関：{'、'.join(f'{lab} {corr[i, j]:+.2f}' for lab, (i, j) in zip(pair_lab, pairs))}。"
               f"固有値 {', '.join(f'{x:.2f}' for x in ev)}、条件数 {ev.max() / ev.min():.1f}\n")
         except np.linalg.LinAlgError:
             p("\n逆行列が求まらない（特異）\n")
@@ -214,18 +224,17 @@ def main():
         Mi = np.linalg.inv(Fb)
         sdb = np.sqrt(np.diag(Mi))
         boot.append(sdb)
-        boot_corr.append([Mi[0, 1] / sdb[0] / sdb[1], Mi[0, 2] / sdb[0] / sdb[2], Mi[1, 2] / sdb[1] / sdb[2]])
+        boot_corr.append([Mi[i, j] / sdb[i] / sdb[j] for i, j in pairs])
     boot, boot_corr = np.array(boot), np.array(boot_corr)
-    p(f"**ブートストラップ**（点ごとに記録を選び直す、{B} 回、Σ は固定。「そのまま」の F で求めた3つ同時の下限）\n")
+    p(f"**ブートストラップ**（点ごとに記録を選び直す、{B} 回、Σ は固定。「そのまま」の F で求めた{len(names)}つ同時の下限）\n")
     p("| パラメータ | 中央値 | 5〜95% |")
     p("|---|---|---|")
     for i, n in enumerate(names):
         q = np.percentile(boot[:, i], [5, 50, 95])
         p(f"| {n} | {q[1]:.3f} | {q[0]:.3f}〜{q[2]:.3f} |")
     qc = np.percentile(boot_corr, [5, 50, 95], axis=0)
-    p(f"\n推定値の相関（中央値、5〜95%）：φ–c {qc[1, 0]:+.2f}（{qc[0, 0]:+.2f}〜{qc[2, 0]:+.2f}）、"
-      f"φ–ρ {qc[1, 1]:+.2f}（{qc[0, 1]:+.2f}〜{qc[2, 1]:+.2f}）、c–ρ {qc[1, 2]:+.2f}（{qc[0, 2]:+.2f}〜{qc[2, 2]:+.2f}）。"
-      f"対角から水増しを引くと正定値でなくなる割合：{nonpd / B:.0%}\n")
+    p("\n推定値の相関（中央値、5〜95%）：" + "、".join(f"{lab} {qc[1, m]:+.2f}（{qc[0, m]:+.2f}〜{qc[2, m]:+.2f}）" for m, lab in enumerate(pair_lab))
+      + f"。対角から水増しを引くと正定値でなくなる割合：{nonpd / B:.0%}\n")
     # グラム行列（白色化した J の列を長さ1にしたもの）の条件数
     Lc = np.linalg.cholesky(Sinv)
     W = Lc.T @ Jm
@@ -233,15 +242,16 @@ def main():
     G = Wn.T @ Wn
     evg = np.linalg.eigvalsh(G)
     p(f"補助：白色化して長さをそろえた J の列のグラム行列の条件数 {evg.max() / evg.min():.1f}"
-      f"（列どうしの cos：φ–c {G[0, 1]:+.2f}、φ–ρ {G[0, 2]:+.2f}、c–ρ {G[1, 2]:+.2f}）\n")
+      f"（列どうしの cos：{'、'.join(f'{lab} {G[i, j]:+.2f}' for lab, (i, j) in zip(pair_lab, pairs))}）\n")
 
     # ---- 4. 線形性
-    p("## 4. 線形性（d = F(中) − (F(端1) + F(端2))/2。φ は +5° と 0°・+10°、c は 2.1 と 0.6・3.6、ρ は +35 と 0・+70）\n")
+    p("## 4. 線形性（d = F(中) − (F(端1) + F(端2))/2。φ は +5° と 0°・+10°、c は 2.1 と 0.6・3.6、ρ は +35 と 0・+70、s は +0.015 と 0・+0.03）\n")
     p(f"| パラメータ | χ²（{d} 成分） | p | |d| ÷ |半刻みの変化|（Σ で測る） | Fx_sat の d [kN] | 標準誤差 | Fx_sat の (端2 − 端1)/2 [kN] |")
     p("|---|---|---|---|---|---|---|")
     lin_bad = []
     p("χ² は点ごとの分散の倍率 κ を見込んだ値（d の雑音の倍率 Σ coef²κ/n）。括弧内は κ を見込まない値。\n")
-    for name, (_, _, lin) in DESIGN.items():
+    for name in names:
+        lin = DESIGN[name][2]
         if not lin:
             continue
         h, z, f1 = lin
@@ -257,7 +267,7 @@ def main():
         dsat = fs[h].mean() - (fs[z].mean() + fs[f1].mean()) / 2
         se = math.sqrt(fs[h].var(ddof=1) / len(fs[h]) + 0.25 * fs[z].var(ddof=1) / len(fs[z]) + 0.25 * fs[f1].var(ddof=1) / len(fs[f1]))
         p(f"| {name}（{h}） | {chi2:.1f}（{chi2_0:.1f}） | {pv:.2g}（{stats.chi2.sf(chi2_0, d):.2g}） | {ratio:.2f} | {dsat:+.2f} | {se:.2f} | {(fs[f1].mean() - fs[z].mean()) / 2:+.2f} |")
-        if (name in ("φ", "c") or a.prefix != PREFIX) and pv < 0.05:
+        if (name in ("φ", "c", "s") or a.prefix != PREFIX) and pv < 0.05:
             lin_bad.append(f"{name} の線形性（曲がり）：χ² の p = {pv:.2g} < 0.05")
     p("")
 
@@ -300,7 +310,7 @@ def main():
         p(f"- どれかのパラメータで χ² の p ≥ 0.05 または水増し ÷ F > 0.5：{'いいえ' if not flags else 'はい（止める）'}")
         for f in flags:
             p(f"  - {f}")
-        jpts = sorted({k for _, w, _ in DESIGN.values() for k in w})
+        jpts = sorted({k for n in names for k in DESIGN[n][1]})
         big = [k for k in jpts if kappa[k] > 2]
         p(f"- J に使う点で κ が 2 を超える：{'はい（報告する）' if big else 'いいえ'}"
           f"（最大 {max(jpts, key=lambda k: kappa[k])} {max(kappa[k] for k in jpts):.2f}）")

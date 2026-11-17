@@ -29,6 +29,11 @@ POINTS = {
     "rho_m70": {"density": 1404.0},               # ρ − 70（範囲の幅 700 の −10%）
     "rho_p70": {"density": 1544.0},               # ρ + 70
     "rho_p35": {"density": 1509.0},               # ρ + 35（線形性の確認）
+    # 膨張率（decisions/2026-11-17_膨張率の範囲は1.10〜1.40.md。範囲の幅 0.30、中心差分 ±0.03 = 幅の ±10%）
+    "s_m0p03": {"swell_factor": 1.25},            # s − 0.03
+    "s_p0p03": {"swell_factor": 1.31},            # s + 0.03
+    "s_p0p015": {"swell_factor": 1.295},          # s + 0.015（線形性の確認）
+    # s = 1.10 の flat_cut は、T12 の ex_swell_flat_cut_s110（ex_maxdensity.py。操作は同じ）を使う
 }
 
 

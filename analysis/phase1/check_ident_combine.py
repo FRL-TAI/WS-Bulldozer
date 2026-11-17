@@ -9,7 +9,8 @@
 
 作業ごとの解析（J・Σ・κ・線形性）は check_ident.py（load_task）と同じ。作業ごとの観測は独立とみなし、F を足す。
   F_合計 = Σ_作業 J̃ᵀ Σ⁻¹ J̃（作業ごとの基準の Σ）
-3つ同時の下限は T8 と同じく、次の3つで示す（notes の docs/phase1.md §8.1）。
+--params で使うパラメータを選ぶ（既定は DESIGN のすべて。T17 で膨張率 s を足した。s の点がない記録では --params φ c ρ）。
+同時の下限は T8 と同じく、次の3つで示す（notes の docs/phase1.md §8.1）。
   - F そのまま（雑音の水増しを含むので楽観的）
   - 目安：対角から水増しを引いた F で1つだけのときの下限 × （そのままの F での 同時 ÷ 1つだけ）
   - ブートストラップ：作業ごと・点ごとに記録を選び直して F を作り直し、そのままの F の3つ同時の下限の 5〜95%
@@ -34,7 +35,11 @@ TASKS = {
     "flat_piecewise": ("ex_ident_flat_piecewise_", (1, 22), None, "data/phase1/flat_piecewise/run_*", (15,)),
     "pile_push": ("ex_ident_pile_push_", (1, 22), 0.10, "data/phase1/pile_push/run_*", ()),
 }
-NAMES = list(DESIGN)
+NAMES = list(DESIGN)    # main で --params に置き換える
+
+
+def pairs_of(names):
+    return [(i, j) for i in range(len(names)) for j in range(i + 1, len(names))]
 
 
 def fisher(T, J=None):
@@ -43,7 +48,7 @@ def fisher(T, J=None):
 
 
 def joint(F):
-    """3つ同時の下限と相関・条件数。正定値でなければ None"""
+    """同時の下限と相関・条件数。正定値でなければ None"""
     ev = np.linalg.eigvalsh(F)
     if ev.min() <= 0:
         return None
@@ -64,8 +69,13 @@ def main():
     ap.add_argument("--bins", nargs=3, action="append", metavar=("TASK", "FIRST", "LAST"), default=[],
                     help="作業の区切りの範囲を変える（例 --bins flat_piecewise 1 22）")
     ap.add_argument("--boot", type=int, default=1000)
+    ap.add_argument("--params", nargs="+", choices=list(DESIGN), help="使うパラメータ（既定は DESIGN のすべて）")
     ap.add_argument("--report")
     a = ap.parse_args()
+    global NAMES
+    NAMES = list(a.params) if a.params else list(DESIGN)
+    pairs = pairs_of(NAMES)
+    pair_lab = [f"{NAMES[i]}–{NAMES[j]}" for i, j in pairs]
     cfg = {k: list(v) for k, v in TASKS.items()}
     for t, f0, f1 in a.bins:
         cfg[t][1] = (int(f0), int(f1))
@@ -75,14 +85,14 @@ def main():
     tasks = {}
     for t in a.tasks:
         prefix, (b0, b1), maxdev, pattern, skip = cfg[t]
-        tasks[t] = load_task([os.path.join(WS, pattern)], prefix, range(b0, b1 + 1), maxdev, skip)
-    p("# 作業を組み合わせた同定可能性（力の経路、φ・c・ρ）\n")
+        tasks[t] = load_task([os.path.join(WS, pattern)], prefix, range(b0, b1 + 1), maxdev, skip, NAMES)
+    p(f"# 作業を組み合わせた同定可能性（力の経路、{'・'.join(NAMES)}）\n")
 
     # ---- 作業ごとのまとめ
     p("## 1. 作業ごと\n")
     p("| 作業 | 区切り | 成分 | 基準の回数 | −F_x の雑音 [kN] | −F_z の雑音 [kN] | AR(1) | F_x・F_z の相関 | κ の最大（J に使う点） |")
     p("|---|---|---|---|---|---|---|---|---|")
-    jpts = sorted({k for _, w, _ in DESIGN.values() for k in w})
+    jpts = sorted({k for n in NAMES for k in DESIGN[n][1]})
     for t, T in tasks.items():
         co = T["co"]
         km = max(jpts, key=lambda k: T["kappa"][k])
@@ -97,13 +107,13 @@ def main():
             Fs = F[i, i] - T["infl"][n]
             p(f"| {t} | {n} | {F[i, i]:.1f} | {T['infl'][n] / F[i, i]:.2f} | {(1 / math.sqrt(Fs)) if Fs > 0 else math.nan:.3f} |")
     p("\n**白色化した J の列の cos**（1 に近いほど、その作業では2つのパラメータを分けにくい）\n")
-    p("| 作業 | φ–c | φ–ρ | c–ρ |")
-    p("|---|---|---|---|")
+    p("| 作業 | " + " | ".join(pair_lab) + " |")
+    p("|---|" + "---|" * len(pairs))
     for t, T in tasks.items():
         F = fisher(T)
         dg = np.sqrt(np.diag(F))
         C = F / np.outer(dg, dg)
-        p(f"| {t} | {C[0, 1]:+.2f} | {C[0, 2]:+.2f} | {C[1, 2]:+.2f} |")
+        p(f"| {t} | " + " | ".join(f"{C[i, j]:+.2f}" for i, j in pairs) + " |")
     p("")
 
     # ---- 組み合わせ
@@ -123,19 +133,19 @@ def main():
             Fb = sum(boot_F(tasks[t], rng) for t in c)
             r = joint(Fb)
             if r is not None:
-                boots.append(np.r_[r[0], r[1][0, 1], r[1][0, 2], r[1][1, 2]])
+                boots.append(np.r_[r[0], [r[1][i, j] for i, j in pairs]])
             Fbs = Fb - np.diag([sum(tasks[t]["infl"][n] for t in c) for n in NAMES])
             if np.linalg.eigvalsh(Fbs).min() <= 0:
                 nonpd += 1
         boots = np.array(boots)
         rows.append(dict(c=c, jr=jr, js=js, ev_s=float(np.linalg.eigvalsh(Fs).min()), single_raw=single_raw, single_sig=single_sig, boots=boots, nonpd=nonpd / a.boot))
 
-    p("**3つ同時の推定標準偏差の下限（範囲比）**\n")
-    p("| 組み合わせ | φ（そのまま／目安／ブートストラップ 5〜95%） | c | ρ | 水増しを引いた F で直接 |")
-    p("|---|---|---|---|---|")
+    p(f"**{len(NAMES)}つ同時の推定標準偏差の下限（範囲比）**\n")
+    p(f"| 組み合わせ | {NAMES[0]}（そのまま／目安／ブートストラップ 5〜95%） | " + " | ".join(NAMES[1:]) + " | 水増しを引いた F で直接 |")
+    p("|---|" + "---|" * (len(NAMES) + 1))
     for r in rows:
         cells = []
-        for i in range(3):
+        for i in range(len(NAMES)):
             if r["jr"] is None:
                 cells.append("—")
                 continue
@@ -146,15 +156,20 @@ def main():
                   else f"正定値でない（ブートストラップで {r['nonpd']:.0%}）")
         p(f"| {' ＋ '.join(r['c'])} | " + " | ".join(cells) + f" | {direct} |")
     p("\n**推定値の相関（そのままの F）と条件数**\n")
-    p("| 組み合わせ | φ–c | φ–ρ | c–ρ（ブートストラップ 5〜95%） | 条件数 |")
-    p("|---|---|---|---|---|")
+    p("相関の括弧内はブートストラップの 5〜95%。\n")
+    p("| 組み合わせ | " + " | ".join(pair_lab) + " | 条件数 |")
+    p("|---|" + "---|" * (len(pairs) + 1))
+    nP = len(NAMES)
     for r in rows:
         if r["jr"] is None:
-            p(f"| {' ＋ '.join(r['c'])} | — | — | — | — |")
+            p(f"| {' ＋ '.join(r['c'])} | " + " | ".join("—" for _ in pairs) + " | — |")
             continue
         C = r["jr"][1]
-        q = np.percentile(r["boots"][:, 5], [5, 95]) if len(r["boots"]) else (math.nan, math.nan)
-        p(f"| {' ＋ '.join(r['c'])} | {C[0, 1]:+.2f} | {C[0, 2]:+.2f} | {C[1, 2]:+.2f}（{q[0]:+.2f}〜{q[1]:+.2f}） | {r['jr'][2]:.0f} |")
+        cells = []
+        for m, (i, j) in enumerate(pairs):
+            q = np.percentile(r["boots"][:, nP + m], [5, 95]) if len(r["boots"]) else (math.nan, math.nan)
+            cells.append(f"{C[i, j]:+.2f}（{q[0]:+.2f}〜{q[1]:+.2f}）")
+        p(f"| {' ＋ '.join(r['c'])} | " + " | ".join(cells) + f" | {r['jr'][2]:.0f} |")
     p("")
 
     text = "\n".join(out)
