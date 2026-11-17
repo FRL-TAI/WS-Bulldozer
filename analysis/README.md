@@ -70,7 +70,8 @@ python3 analysis/phase0/plot_figures.py --skip-analysis --only 6 7   # 解析の
 | スクリプト | 内容 | 使った場面 |
 | --- | --- | --- |
 | `check_pilot_phi.py` | φ だけの小さな試験（基準・φ ±5°・+2.5°）の解析。基準の雑音（Σ の係数）、Fx_sat の差と必要な回数、30 成分（−F_x・−F_z、0.625 m ごと）と段差の前の 20 成分のフィッシャー情報、線形性、関門6 との比較、貫入抵抗の段差が合計の力に残るか | φ の試験（T4） |
-| `check_ident.py` | 同定可能性（力の経路）。φ・c・ρ の J の列（φ・ρ は中心差分、c は2次の片側差分、範囲の幅で正規化）、30 成分の χ² 検定と雑音の水増し、3×3 のフィッシャー情報行列と推定標準偏差の下限（範囲比）、グラム行列の条件数、線形性、φ の試験・関門6 との比較 | flat_cut の φ・c・ρ（T7） |
+| `check_ident.py` | 同定可能性（力の経路）。φ・c・ρ の J の列（中心差分、範囲の幅で正規化）、χ² 検定と雑音の水増し、3×3 のフィッシャー情報行列と推定標準偏差の下限（範囲比）、グラム行列の条件数、線形性、φ の試験・関門6 との比較 | flat_cut の φ・c・ρ（T7・T8）、flat_piecewise・pile_push（T9） |
+| `check_ident_combine.py` | 作業ごとのフィッシャー情報行列を足し合わせ、作業の組み合わせごとに φ・c・ρ の3つ同時の下限（そのまま／目安／ブートストラップ）と推定値の相関を出す。作業ごとの Σ・κ・白色化した J の列の cos も並べる | flat_cut・flat_piecewise・pile_push の組み合わせ（T9） |
 
 ```
 ros2 run bull_ope collect_data --episodes ex_ident_flat_cut_base ex_ident_flat_cut_phi_m5 ex_ident_flat_cut_phi_p5 \
@@ -80,7 +81,16 @@ python3 analysis/phase1/check_pilot_phi.py data/phase1/pilot_phi/run_*_pilot_phi
 ```
 
 ```
-# flat_cut の φ・c・ρ（基準 15、φ ±10°・+5° 各 15、c 2点 各 3、ρ 3点 各 6）
+# flat_cut の φ・c・ρ（基準 15、φ ±10°・+5° 各 15、c ±1.5 kPa 各 6（参考に +3 kPa を 3）、ρ 3点 各 6）
 python3 analysis/phase1/check_ident.py 'data/phase1/flat_cut/run_*' --pilot 'data/phase1/pilot_phi/run_*' \
     --gate6 'data/validation/gate6/run_*' --report data/phase1/flat_cut/check_ident.md
 ```
+
+```
+# flat_piecewise・pile_push は check_ident.py の --prefix・--bins（・--skip・--max-dev）で作業ごとに解析し、組み合わせは check_ident_combine.py で出す
+# flat_piecewise の区切り 15 は、6→9 cm に変えた直後で落ち着くまでの 1.5 秒にまるごと入るので除く
+python3 analysis/phase1/check_ident.py 'data/phase1/flat_piecewise/run_*' --prefix ex_ident_flat_piecewise_ --bins 1 22 --skip 15
+python3 analysis/phase1/check_ident.py 'data/phase1/pile_push/run_*' --prefix ex_ident_pile_push_ --bins 1 22 --max-dev 0.10
+python3 analysis/phase1/check_ident_combine.py --tasks flat_cut flat_piecewise pile_push --boot 1000 --report data/phase1/check_ident_combine.md
+```
+

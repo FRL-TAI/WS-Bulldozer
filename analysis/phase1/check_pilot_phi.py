@@ -59,8 +59,8 @@ def episode_files(paths, prefix):
     return out
 
 
-def episode_summary(path):
-    """区切りごとの −F_x・−F_z・−F_pen_x [kN] と刃先の位置、段差の前後の差、Fx_sat"""
+def episode_summary(path, bins=BINS):
+    """区切りごとの −F_x・−F_z・−F_pen_x [kN] と刃先の位置、段差の前後の差、Fx_sat、深さのずれの 95%"""
     rows = settled_cut_rows(pd.read_csv(path))
     if rows is None:
         return None
@@ -69,20 +69,22 @@ def episode_summary(path):
         Fx=("F_total_x", lambda s: -s.mean() / 1e3), Fz=("F_total_z", lambda s: -s.mean() / 1e3),
         Fpen=("F_pen_x", lambda s: -s.mean() / 1e3), V=("cut_volume", "mean"),
         ex_max=("edge_x", "max"))
-    b = b.reindex(BINS)
+    b = b.reindex(list(bins))
     ex = rows["edge_x"]
     pre, post = rows[(ex > PRE_WIN[0]) & (ex < PRE_WIN[1])], rows[(ex > POST_WIN[0]) & (ex < POST_WIN[1])]
     step = {c: (-post[col].mean() + pre[col].mean()) / 1e3
             for c, col in (("Fx", "F_total_x"), ("Fz", "F_total_z"), ("Fpen", "F_pen_x"))}
     sat = b[b["V"] > V_SAT]
+    # 深さのずれ |depth − target_depth| の 95% 点（関門3 の U3。走り出し・目標の変化から 1.5 秒を除いた行）
+    dev95 = float(np.percentile(np.abs(rows["depth"] - rows["target_depth"]), 95))
     return {"bins": b, "step": step, "Fx_sat": float(sat["Fx"].mean()) if len(sat) else math.nan,
-            "phi": float(rows["label_phi"].iloc[0])}
+            "phi": float(rows["label_phi"].iloc[0]), "dev95": dev95}
 
 
-def collect(files):
+def collect(files, bins=BINS):
     eps = {}
     for name, path in files:
-        s = episode_summary(path)
+        s = episode_summary(path, bins)
         if s is not None:
             eps.setdefault(name, []).append(s)
     return eps
@@ -94,28 +96,31 @@ def obs_matrix(eps, bins):
 
 
 # ---------------------------------------------------------------- Σ
-def lag_corr(res, nb, lag):
-    """同じ成分の、区切りの差 lag の相関（成分と区切りの組で平均）"""
+def lag_corr(res, nb, lag, pos=None):
+    """同じ成分の、区切りの番号の差が lag の相関（成分と区切りの組で平均）。
+    pos は区切りの番号（途中の区切りを飛ばしたとき、番号の差で数える。既定は 0, 1, …）"""
+    pos = np.arange(nb) if pos is None else np.asarray(pos)
     out = []
     for c in range(2):
-        for i in range(nb - lag):
-            a, b = res[:, c * nb + i], res[:, c * nb + i + lag]
-            if np.std(a) > 0 and np.std(b) > 0:
-                out.append(np.corrcoef(a, b)[0, 1])
+        for i in range(nb):
+            for j in np.nonzero(pos - pos[i] == lag)[0]:
+                a, b = res[:, c * nb + i], res[:, c * nb + j]
+                if np.std(a) > 0 and np.std(b) > 0:
+                    out.append(np.corrcoef(a, b)[0, 1])
     return float(np.mean(out)) if out else math.nan
 
 
-def sigma_coeffs(X, nb):
+def sigma_coeffs(X, nb, pos=None):
     res = X - X.mean(axis=0)
     sd = res.std(axis=0, ddof=1)
-    lags = [lag_corr(res, nb, L) for L in range(1, 6)]
+    lags = [lag_corr(res, nb, L, pos) for L in range(1, 6)]
     rxz = float(np.mean([np.corrcoef(res[:, i], res[:, nb + i])[0, 1] for i in range(nb)]))
     return {"sd": sd, "sd_Fx": float(np.sqrt(np.mean(sd[:nb] ** 2))), "sd_Fz": float(np.sqrt(np.mean(sd[nb:] ** 2))),
             "lags": lags, "ar": max(lags[0], 0.0), "r_xz": rxz}
 
 
-def sigma_model(sd, nb, ar, rxz):
-    idx = np.arange(nb)
+def sigma_model(sd, nb, ar, rxz, pos=None):
+    idx = np.arange(nb) if pos is None else np.asarray(pos)
     R_ar = ar ** np.abs(idx[:, None] - idx[None, :])
     R = np.kron(np.array([[1.0, rxz], [rxz, 1.0]]), R_ar)
     return np.outer(sd, sd) * R

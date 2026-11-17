@@ -169,6 +169,8 @@ ROS 側で変えられる自由度（動き・土質・地形）を示すサン�
 | `ex_compacted_strips` | 地山・踏み固め・緩みの帯を横切って一定の深さで削る（要 `AGX_GRID_CONTROL`）。`compaction_rect` は関門で確かめていない |
 | `ex_shuttle_3x5m` | 特定の土質で、5 m の区間を3往復する（前進で削り、排土板を上げて後退で戻る） |
 | `ex_ident_flat_cut_<点>` | フェーズ1 の同定可能性用。基準の土質（dirt_1、膨張率 1.28）から1つのパラメータだけをずらし、深さ 9 cm・0.5 m/s で 10 m 削る（val_sens_base と同じ操作）。点は `POINTS` に並べる。本番の設計の点は `base`、φ の `phi_m10`・`phi_p10`・`phi_p5`（線形性）、c の `c_m1p5`・`c_p1p5`、ρ の `rho_m70`・`rho_p70`・`rho_p35`（線形性）。φ の試験の `phi_m5`・`phi_p2p5` と、c の片側の傾きの参考の `c_p3` も残してある |
+| `ex_ident_flat_piecewise_<点>` | フェーズ1 の同定可能性用。点は `ex_ident_flat_cut` と同じ。14 m を3区間に分け、深さ 12 → 6 → 9 cm・0.5 m/s で削る |
+| `ex_ident_pile_push_<点>` | フェーズ1 の同定可能性用。点は `ex_ident_flat_cut` と同じ。刃先から 3 m の位置に長さ 2 m・高さ 0.3 m の緩い土の山を積み、深さ 2 cm・0.5 m/s で 14 m 押す（要 `AGX_GRID_CONTROL`） |
 
 ### 3.3 検証用（`validation/`）
 検証用のエピソードは、学習データには使わない。どの関門で使ったかは [検証のドキュメント](validation/README.md) を参照。
