@@ -55,12 +55,34 @@ run_<日時>_<実行名>/
 | `run_time`、`run_distance` | 走行時間 [s] と走行距離 [m] |
 | `raise_depth_over_max` | 上げる区間で実際の深さが `MAX_ACTUAL_DEPTH` を超えた場合の最大値 [m]。超えなければ `null` |
 | `rows`、`path` | 時系列データの行数とパス |
+| `cut_compaction_steps`、`cut_compaction_min`、`cut_compaction_max`、`cut_compaction_below1_frac`、`cut_compaction_first_cross_t` | 削っている層の締固めの程度（`state_cut_compaction_mean`）の、running 中の集計（下の「削っている層の締固め」） |
 | `compaction_path`、`compaction_snapshots`、`compaction_rows`、`compaction_final` | 締固めの記録のパス、受け取った回数、行数、最後の記録が届いたか（`record_compaction` のエピソードだけ） |
 | `status` | `ok`、`skipped: 理由`、`error: 内容` |
 
 - `label_E0`：既定の硬化の設定（KE 1・NE 0.0833）では、削っている最中の地山の実際の剛性は E0 より小さい（notes の docs/phase0.md §3.4）。
 - エラーやスキップで止まったエピソードは、止まった時点までに決まっている列（エピソードの情報と `status`）だけが入る。
 - NumPy の型や NaN・無限大は、書き出す前に普通の型（NaN・無限大は `null`）に変換する（`recording/json_utils.py`）。
+
+### 削っている層の締固め
+時系列データには、地表の値（`state_compaction_*`）とは別に、刃先の高さの層の値を記録する（notes の decisions/2026-11-17_削っている層の締固めを案Aで記録する.md）。
+
+| 時系列データの列 | 内容 |
+| --- | --- |
+| `state_cut_compaction_mean`、`_min`、`_max` | 刃先の前 0〜0.5 m・排土板の幅のマスについて、刃先の高さ（`edge_z`）に当たるボクセルの締固めの程度の平均・最小・最大。削っているマスがなければ NaN |
+| `state_cut_compaction_n` | 読んだマスの数（刃先がそのマスの地面より下にあるマスだけ。削っていなければ 0） |
+
+- ボクセルの決め方：地表のボクセル zs の中心の高さ y_c（AGX の `getGridElementPositionWorld`）から、刃先のボクセルを zs + floor((edge\_z − y_c) / e + 0.5) とする（e はボクセルの大きさ 0.3125 m）。刃先がちょうど境目にあるときは上のボクセル。刃先のボクセルが地表のボクセルより上になるマスも数えない。
+- 地表の `state_compaction_mean` には刃の前の緩んだ土が混ざるので、地山の w の判定にはこちらを使う。
+- 列は `state_compaction_n` の後に入る。それより前の記録にはこの列がない。
+
+episodes.jsonl の要約（running 中に値があったステップだけで集計。値がなければ `null`）：
+
+| 列 | 内容 |
+| --- | --- |
+| `cut_compaction_steps` | `state_cut_compaction_mean` に値があったステップの数 |
+| `cut_compaction_min`、`cut_compaction_max` | そのステップの平均（`state_cut_compaction_mean`）の最小・最大 |
+| `cut_compaction_below1_frac` | 1 を下回った（< 0.9995）ステップの割合 |
+| `cut_compaction_first_cross_t` | 1 を初めてまたいだ時刻 [s]（時系列データの `t`）。「1 を下回っているか（< 0.9995）」が、最初に値があったステップと変わった最初のステップ。地山（1.000）から下回った場合も、1 を超えていた土が下回った場合も入る。またがなければ `null` |
 
 **`dataset_pile_push` の山の体積**は、`param_pile_length` × 3.0 m × `param_pile_height`（緩い状態の体積）で計算できる。時系列データの `cut_volume` は地山を削った分だけで、山の量は含まない。
 

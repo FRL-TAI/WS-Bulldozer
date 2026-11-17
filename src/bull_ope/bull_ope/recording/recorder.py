@@ -3,12 +3,57 @@ blade_state を受信するたびに、その時点の全データを CSV に1�
 
 各トピックはすべて同じシミュレーションから来るので、blade_state(50 Hz)を基準とし、
 他のトピックはその時点の最新値を使う（ゼロ次ホールド）
+
+stop() は、エピソードの要約（episodes.jsonl に入る）として、削っている層の締固めの程度
+（state_cut_compaction_mean）の running 中の集計を返す（CutCompactionSummary）
 """
 import csv
 import math
 import threading
 
 from .. import config as C
+
+
+class CutCompactionSummary:
+    """running 中の state_cut_compaction_mean（刃先の高さのボクセルの締固めの程度の、そのステップの平均）の集計。
+    NaN（削っているマスがないステップ）は数えない。
+      cut_compaction_steps        値があったステップの数
+      cut_compaction_min / _max   そのステップの平均の最小・最大
+      cut_compaction_below1_frac  1 を下回った（< 1 − TOL）ステップの割合
+      cut_compaction_first_cross_t
+          1 を初めてまたいだ時刻 [s]（記録の t。エピソードの記録の開始から）。
+          「1 を下回っている（< 1 − TOL）か」が、最初に値があったステップと変わった最初のステップの時刻。
+          地山（1.000）から 1 を下回った場合も、1 を超えていた土が 1 を下回った場合も、ここに入る。またがなければ NaN
+    """
+    TOL = 5e-4
+
+    def __init__(self):
+        self.n = 0
+        self.lo = math.inf
+        self.hi = -math.inf
+        self.below = 0
+        self.below0 = None      # 最初に値があったステップで 1 を下回っていたか
+        self.cross_t = math.nan
+
+    def add(self, v, t):
+        if not math.isfinite(v):
+            return
+        self.n += 1
+        self.lo, self.hi = min(self.lo, v), max(self.hi, v)
+        below = v < 1 - self.TOL
+        self.below += below
+        if self.below0 is None:
+            self.below0 = below
+        elif below != self.below0 and not math.isfinite(self.cross_t):
+            self.cross_t = t
+
+    def result(self):
+        nan = math.nan
+        return {"cut_compaction_steps": self.n,
+                "cut_compaction_min": self.lo if self.n else nan,
+                "cut_compaction_max": self.hi if self.n else nan,
+                "cut_compaction_below1_frac": self.below / self.n if self.n else nan,
+                "cut_compaction_first_cross_t": self.cross_t}
 
 
 class Recorder:
@@ -34,6 +79,7 @@ class Recorder:
             self.prev_t = None
             self.cut_volume = 0.0
             self.rows = 0
+            self.cut_compaction = CutCompactionSummary()
             self.active = True
 
     def stop(self):
@@ -42,7 +88,7 @@ class Recorder:
                 return {"rows": 0}
             self.active = False
             self.file.close()
-            return {"rows": self.rows, "path": self.path}
+            return {"rows": self.rows, "path": self.path, **self.cut_compaction.result()}
 
     def _on_blade(self, blade):
         if not self.active:
@@ -81,6 +127,8 @@ class Recorder:
             row["target_depth"] = self.target_depth
             row["depth_clipped"] = int(self.depth_clipped)
             row["t"] = sim_time - self.t0
+            if self.phase == "running":
+                self.cut_compaction.add(blade.get("state_cut_compaction_mean", math.nan), row["t"])
             row.update(blade)
             row.update(joints)
             row.update(pose)
