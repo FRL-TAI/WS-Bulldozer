@@ -63,6 +63,71 @@ def boot_F(T, rng):
     return fisher(T, J)
 
 
+def boot_sig(T, rng):
+    """点ごとにエピソードを選び直し、J と水増し（κ を求め直す）から、そのままの F と水増しの対角を返す（T21）"""
+    need = {k for n in NAMES for k in DESIGN[n][1]}
+    Sinv = T["Sinv"]
+    mb, tr = {}, {}
+    for k in need:
+        Xk = T["X"][k][rng.integers(0, len(T["X"][k]), len(T["X"][k]))]
+        mb[k] = Xk.mean(axis=0)
+        r = Xk - mb[k]
+        nk = len(Xk)
+        tr[k] = float(np.einsum("ij,jk,ik->i", r, Sinv, r).mean()) * nk / (nk - 1)   # tr(Σ⁻¹S)
+    Jm = np.column_stack([sum(wt * mb[k] for k, wt in DESIGN[n][1].items()) for n in NAMES])
+    infl = np.array([sum(wt ** 2 * tr[k] / len(T["X"][k]) for k, wt in DESIGN[n][1].items()) for n in NAMES])
+    return Jm.T @ Sinv @ Jm, infl
+
+
+def boot_check(tasks, combos, B, rng, p):
+    """信号 ÷ ブートストラップの標準偏差と、下限の 16〜84% の幅（decisions/2026-11-17_信号のばらつきを判定と下限に見込む.md）"""
+    nP = len(NAMES)
+    point = {}
+    for c in combos:
+        F = sum(fisher(tasks[t]) for t in c)
+        infl = np.array([sum(tasks[t]["infl"][n] for t in c) for n in NAMES])
+        point[c] = F - np.diag(infl)
+    samples = {c: [] for c in combos}
+    for _ in range(B):
+        per = {t: boot_sig(tasks[t], rng) for t in tasks}
+        for c in combos:
+            samples[c].append(sum(per[t][0] for t in c) - np.diag(sum(per[t][1] for t in c)))
+    p(f"## 3. 信号のばらつきを見込んだ判定（ブートストラップ {B} 回。点ごとにエピソードを選び直し、J と水増しを求め直す）\n")
+    p("信号 = 水増しを引いた F の対角。基準：信号 ÷ 標準偏差 ≥ 2。下限は範囲比で、点推定（16〜84%）。"
+      "1つだけの下限の幅は信号が正の標本から、同時の下限は水増しを引いた F が正定値の標本から求めた。\n")
+    p("ブートストラップの標本の平均は、点推定より大きく偏る（選び直した平均には元の雑音がもう一度乗り、重複のある標本では水増しが小さく出るため）。"
+      "幅と正定値の割合は、各標本から偏り（標本の平均 − 点推定、行列ごと）を引いた標本で求めた。標準偏差は偏りによらない。"
+      "偏りの大きさ（標本の平均 ÷ 点推定）も並べる。\n")
+    p("| 組み合わせ | パラメータ | 信号 | 標準偏差 | 信号 ÷ 標準偏差 | ≥ 2 | 偏り（平均 ÷ 点推定） | 下限（1つだけ）点推定（16〜84%） | 信号が正の割合 | "
+      f"下限（{nP}つ同時）点推定（16〜84%） |")
+    p("|---|---|---|---|---|---|---|---|---|---|")
+    summary = []
+    for c in combos:
+        S_raw = np.array(samples[c])
+        F0 = point[c]
+        S = S_raw - (S_raw.mean(axis=0) - F0)      # 偏りを引いた標本
+        pd0 = np.linalg.eigvalsh(F0).min() > 0
+        joint0 = np.sqrt(np.diag(np.linalg.inv(F0))) if pd0 else np.full(nP, math.nan)
+        pdmask = np.array([np.linalg.eigvalsh(x).min() > 0 for x in S])
+        jb = np.array([np.sqrt(np.diag(np.linalg.inv(x))) for x in S[pdmask]]) if pdmask.any() else np.empty((0, nP))
+        for i, n in enumerate(NAMES):
+            sig, sd = F0[i, i], float(np.std(S[:, i, i], ddof=1))
+            pos = S[:, i, i] > 0
+            sb = 1 / np.sqrt(S[pos, i, i])
+            q1 = np.percentile(sb, [16, 84]) if pos.any() else (math.nan, math.nan)
+            qj = np.percentile(jb[:, i], [16, 50, 84]) if len(jb) else (math.nan,) * 3
+            single0 = 1 / math.sqrt(sig) if sig > 0 else math.nan
+            jtxt = (f"{joint0[i]:.3f}" if pd0 else f"正定値でない（中央値 {qj[1]:.3f}）") + f"（{qj[0]:.3f}〜{qj[2]:.3f}）"
+            ok = sig / sd >= 2
+            summary.append((c, n, sig / sd, ok))
+            bias = S_raw[:, i, i].mean() / sig if sig > 0 else math.nan
+            p(f"| {' ＋ '.join(c) if i == 0 else ''} | {n} | {sig:.1f} | {sd:.1f} | {sig / sd:.2f} | {'はい' if ok else '**いいえ**'} | {bias:.2f} | "
+              f"{single0:.3f}（{q1[0]:.3f}〜{q1[1]:.3f}） | {pos.mean():.0%} | {jtxt} |")
+        p(f"| | 正定値になった標本の割合 | {pdmask.mean():.0%} | | | | | | | |")
+    p("")
+    return summary
+
+
 def main():
     ap = argparse.ArgumentParser(description="作業を組み合わせた同定可能性")
     ap.add_argument("--tasks", nargs="+", default=list(TASKS), help="使う作業")
@@ -71,6 +136,8 @@ def main():
     ap.add_argument("--boot", type=int, default=1000)
     ap.add_argument("--params", nargs="+", choices=list(DESIGN), help="使うパラメータ（既定は DESIGN のすべて）")
     ap.add_argument("--s-step", type=float, default=0.06, choices=sorted(S_DESIGNS), help="膨張率の中心差分の刻み（既定 0.06）")
+    ap.add_argument("--boot-check", action="store_true",
+                    help="信号 ÷ ブートストラップの標準偏差と、下限の 16〜84% の幅を足す（T21。既定では出さない）")
     ap.add_argument("--report")
     a = ap.parse_args()
     set_s_step(a.s_step)
@@ -173,6 +240,9 @@ def main():
             cells.append(f"{C[i, j]:+.2f}（{q[0]:+.2f}〜{q[1]:+.2f}）")
         p(f"| {' ＋ '.join(r['c'])} | " + " | ".join(cells) + f" | {r['jr'][2]:.0f} |")
     p("")
+
+    if a.boot_check:
+        boot_check(tasks, combos, a.boot, np.random.default_rng(1), p)
 
     text = "\n".join(out)
     print(text)
