@@ -86,6 +86,12 @@ episodes.jsonl の要約（running 中に値があったステップだけで集
 
 **`dataset_pile_push` の山の体積**は、`param_pile_length` × 3.0 m × `param_pile_height`（緩い状態の体積）で計算できる。時系列データの `cut_volume` は地山を削った分だけで、山の量は含まない。
 
+### 常に NaN の列
+時系列データの `front_soil_mass`（排土板の前の土の質量）と `excavated_volume_step`（そのステップの掘削体積）は、**常に NaN** で、使えない。
+
+- 理由：Unity の `BladeStatePublisher.cs` で、この2列を求める処理が `#if AGX_EXTRA_TERRAIN_API` の中にあり、このシンボルを定義していない。定義しても、`Terrain.getSoilParticleAggregate(shovel)` は AGX 2.37 の C# にはない（2.37 では TerrainToolCollection の側にある）のでコンパイルが通らない。`Terrain.getLastExcavatedVolume` は 2.37 にもある。
+- 本番データの再取得の前に、AGX の体積・質量の API（`getSoilAggregateMass`・`getInnerVolume` など）で取れるようにする予定（notes の decisions/2026-11-17_土の山の項の摩擦角と体積の入力.md）。
+- それまでは、土の山の量の代わりに `cut_volume`（地山を削った体積の積算。頭打ちの前だけ）を使う。
 
 ## 3. 大きさの目安（関門7）
 | 項目 | 値 |
