@@ -23,8 +23,9 @@ POINTS = {
     # 本番の設計（decisions/2026-11-17_φの刻みを±10°にする.md。phi_p5 は ±10° の線形性の点として使う）
     "phi_m10": {"friction_angle_deg": 29.98},     # φ − 10°（範囲の幅 25° の −40%）
     "phi_p10": {"friction_angle_deg": 49.98},     # φ + 10°
-    "c_p1p5": {"cohesion": 3600.0},               # c + 1.5 kPa（範囲の幅 30 kPa の 5%。2次の片側差分）
-    "c_p3": {"cohesion": 5100.0},                 # c + 3.0 kPa
+    "c_m1p5": {"cohesion": 600.0},                # c − 1.5 kPa（範囲の幅 30 kPa の −5%。中心差分。decisions/2026-11-17_cは中心差分±1.5kPaにする.md）
+    "c_p1p5": {"cohesion": 3600.0},               # c + 1.5 kPa（中心差分）
+    "c_p3": {"cohesion": 5100.0},                 # c + 3.0 kPa（片側の傾きの参考。T7 の2次の片側差分で使った点）
     "rho_m70": {"density": 1404.0},               # ρ − 70（範囲の幅 700 の −10%）
     "rho_p70": {"density": 1544.0},               # ρ + 70
     "rho_p35": {"density": 1509.0},               # ρ + 35（線形性の確認）
