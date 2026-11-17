@@ -7,7 +7,8 @@ CompactionProbe の CSV（compaction_*.csv）を読み、履帯による締固�
 オプション：
   --x0, --x1   集計に使う前後の範囲 [m]（開始位置からの距離）。既定は 0.5〜7.5 m
   --cell       地形のマスの大きさ [m]（沈下量の予測に使う）。既定は 0.3125
-  --z-offset   地形のローカル座標の高さ 0 のワールドの高さ [m]（Terrain の Transform の y）。既定は 0
+  --z-offset   地表のボクセルの中心のワールドの高さ [m]。既定は 0.0125（AGX の getGridElementPositionWorld と、
+               記録の surface_z との一致で確かめた値。notes の decisions/2026-11-17_ボクセルの高さの基準を0.0125mに直す.md）
   --surface-fill  地表のボクセルに土が入っている割合を固定する（0〜1）。既定は高さから計算
   --avg-depth  深さ方向の平均を取る範囲 [m]（最初の記録の地表から）。既定は 0.5
   --dh-scale   沈下量からの推定で、実測の沈下量に掛ける倍率。既定は 1.0
@@ -581,8 +582,8 @@ def main():
     ap.add_argument("--x0", type=float, default=0.5)
     ap.add_argument("--x1", type=float, default=7.5)
     ap.add_argument("--cell", type=float, default=0.3125)
-    ap.add_argument("--z-offset", type=float, default=0.0,
-                    help="地形のローカル座標の高さ 0 のワールドの高さ [m]（Terrain の Transform の y）")
+    ap.add_argument("--z-offset", type=float, default=0.0125,
+                    help="地表のボクセルの中心のワールドの高さ [m]（既定 0.0125）")
     ap.add_argument("--surface-fill", type=float, default=None,
                     help="地表のボクセルに土が入っている割合を固定する（0〜1）。指定しなければ高さから計算")
     ap.add_argument("--avg-depth", type=float, default=0.5,

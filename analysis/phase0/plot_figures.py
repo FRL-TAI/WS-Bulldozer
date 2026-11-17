@@ -158,7 +158,9 @@ def note(ax, text, loc="upper right"):
 
 # ---------------------------------------------------------------- 実験A の集計（check_compaction.py の関数）
 COL_DEPTH = 0.8   # 深さ方向の平均を取る範囲 [m]（§3.1 の「0.8 m までの平均」）
-DH_SCALE = 1.07   # 沈下量から深さ方向の平均を求めるときの沈下の倍率（check_compaction.py の --dh-scale。図4 の比 約 1.07）
+DH_SCALE = 1.03   # 沈下量から深さ方向の平均を求めるときの沈下の倍率（check_compaction.py の --dh-scale）。
+                  # 実験A の2記録の 5b の k（1.0325・1.0325・1.0331・1.0362）の平均を小数2桁に丸めた値
+Z_OFFSET = 0.0125  # 地表のボクセルの中心のワールドの高さ [m]（check_compaction.py の --z-offset と同じ）
 
 
 def exp_a(path, x0=0.5, x1=7.5):
@@ -189,7 +191,7 @@ def exp_a(path, x0=0.5, x1=7.5):
     first = {r["_cell"]: r for r in tb[t_first]}
     colavg = []   # 通過の終わりごとの、履帯のマスの深さ COL_DEPTH までの平均の締固めの程度（質量で重み付け）
     for t in ends:
-        v = [cc.column_average(r, first[r["_cell"]], cols, 0.3125, 0.0, COL_DEPTH)[1] for r in tb[t]
+        v = [cc.column_average(r, first[r["_cell"]], cols, 0.3125, Z_OFFSET, COL_DEPTH)[1] for r in tb[t]
              if r["_group"] in ("track_L", "track_R") and r["_cell"] in first]
         colavg.append(float(np.nanmean(v)))
     est_err = []  # 最後の記録で、沈下量だけから求めた深さ方向の平均 − 真値（check_compaction.py の 5a と同じ式、--dh-scale DH_SCALE）
@@ -197,7 +199,7 @@ def exp_a(path, x0=0.5, x1=7.5):
         r0 = first.get(r["_cell"])
         if r["_group"] not in ("track_L", "track_R") or r0 is None:
             continue
-        _, c_true, M, T_old = cc.column_average(r, r0, cols, 0.3125, 0.0, COL_DEPTH)
+        _, c_true, M, T_old = cc.column_average(r, r0, cols, 0.3125, Z_OFFSET, COL_DEPTH)
         if math.isfinite(c_true):
             est_err.append(M / (T_old + DH_SCALE * (r["_h"] - r0["_h"])) - c_true)
     last = {r["_cell"]: r for r in tb[times[-1]]}
@@ -205,7 +207,7 @@ def exp_a(path, x0=0.5, x1=7.5):
     for key, r in last.items():
         if r["_group"] not in ("track_L", "track_R") or key not in first:
             continue
-        p, _ = cc.predict_settlement(r, first[key], cols, 0.3125, 0.0)
+        p, _ = cc.predict_settlement(r, first[key], cols, 0.3125, Z_OFFSET)
         if math.isfinite(p):
             pred.append(p * 1000.0)
             meas.append((r["_h"] - first[key]["_h"]) * 1000.0)
@@ -529,7 +531,7 @@ def then_cut_segments(path, cells_rows, curve, seg=1.0):
         if not all(math.isfinite(v) for v in (x, cst, S)):
             continue
         r = next((v for k, v in snap.items() if k[0] == c["lane"] and abs(v["_x"] - x) < 1e-3), None)
-        depth[(c["group"], x)] = cc.column_average(r, r, cols, 0.3125, 0.0, COL_DEPTH)[0] if r is not None else math.nan
+        depth[(c["group"], x)] = cc.column_average(r, r, cols, 0.3125, Z_OFFSET, COL_DEPTH)[0] if r is not None else math.nan
         cells.append({"file": name, "group": c["group"], "x": x, "c": cst, "S": S})
     segs, _ = cs.make_segments(cells, seg, math.inf, MIN_CELLS)
     members = defaultdict(list)
@@ -783,7 +785,7 @@ def check_edge_layer_w(d, blade_offset=2.8, trim=0.5):
                     if r is None:
                         continue
                     h_edge = r0["_h"] - depth
-                    k = math.floor(r["_h"] / 0.3125 + 0.5) - math.floor(h_edge / 0.3125 + 0.5)
+                    k = math.floor((r["_h"] - Z_OFFSET) / 0.3125 + 0.5) - math.floor((h_edge - Z_OFFSET) / 0.3125 + 0.5)
                     if 0 <= k < len(cols):
                         key = band if band in ("2", "4") else f"{band}@{lv_of.get(band, math.nan):.2f}"
                         w[key].append(cc.to_float(r[cols[k]]))
