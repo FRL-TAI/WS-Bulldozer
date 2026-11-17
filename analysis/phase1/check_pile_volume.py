@@ -18,7 +18,10 @@
   3. 密度        排土板を上げている間の「動く土の減り ÷ (ρ/s)」と「地形の体積の増え」
   4. 質量の収支  cut_volume·ρ と M_pile ＋ 横の畝の質量、広い窓での削った分・積もった分
   5. 関門5       val_constant_depth* を check_physics.py と同じ処理（0.625 m ごとの平均、走り出しから 1.5 s を除く）で、
-                 −F_x = a + b·M·g の b を M = cut_volume·ρ、M_pile、front_soil_mass で求める（直線の領域 V < 1.0 m³ と全体）
+                 −F_x = a + b·M·g の b を M = cut_volume·ρ、M_pile、M_pile ＋ 横の畝、front_soil_mass で求める
+                 （直線の領域 V < 1.0 m³ と全体。残差の RMS も。横の範囲の見直しの基準は decisions/2026-11-17_V_pileの横の範囲は排土板の幅のままにする.md）
+  6. 膨張率ごと  --swell に T17 の記録（ex_ident_*_s_* と ex_swell_flat_cut_s110）を渡すと、作業・膨張率の点ごとに M_pile での b を求める
+                 （ρ/s の換算が合っていれば、b は s によらない。T18）。--paths の ex_ident_*_base も基準として並べる
 """
 import argparse
 import math
@@ -70,23 +73,28 @@ def gate5_bins(df):
         return None
     key = np.floor(rows["distance"] / BIN).astype(int).astype(str) + "_" + rows["target_depth"].round(4).astype(str)
     b = pd.DataFrame({"key": key, "Fx": rows["F_total_x"], "V": rows["cut_volume"], "M_cut": rows["M_cut"],
-                      "M_pile": rows["M_pile"], "M_front": rows["front_soil_mass"]})
+                      "M_pile": rows["M_pile"], "M_pile_ridge": rows["M_pile"] + rows["M_ridge"],
+                      "M_front": rows["front_soil_mass"]})
     return b.groupby("key", sort=False).mean(numeric_only=True)
 
 
-def slope(m, fx):
+def slope(m, fx, rms=False):
     m, fx = np.asarray(m, float), np.asarray(fx, float)
     ok = np.isfinite(m) & np.isfinite(fx)
     if ok.sum() < 3:
-        return float("nan"), float("nan"), float("nan")
+        return (float("nan"),) * (4 if rms else 3)
     b, a = np.polyfit(m[ok] * G, -fx[ok], 1)
     r = np.corrcoef(m[ok], -fx[ok])[0, 1]
+    if rms:
+        res = -fx[ok] - (a + b * m[ok] * G)
+        return a, b, r, float(np.sqrt(np.mean(res ** 2)))
     return a, b, r
 
 
 def main():
     ap = argparse.ArgumentParser(description="土の山の体積の比較と関門5 の出し直し（T15）")
     ap.add_argument("paths", nargs="+")
+    ap.add_argument("--swell", nargs="*", default=[], help="T17 の記録（6. 膨張率ごとの係数）")
     ap.add_argument("--report")
     ap.add_argument("--fig")
     a = ap.parse_args()
@@ -229,19 +237,35 @@ def main():
         out(f"{len(B['ep'].unique())} エピソード、{len(B)} 区切り（直線の領域 V < {LINEAR_V} m³ は {len(lo)} 区切り）。"
             f"tanφ = {math.tan(math.radians(39.98)):.3f}、tanδ = 0.4167。")
         out("")
-        out("| M | 直線の領域：b / a [kN] / 相関 | 全体：b / a [kN] / 相関 | b ÷ tanφ（直線） | 0.79〜0.97 の内か（直線） |")
+        out("| M | 直線の領域：b / a [kN] / 相関 / 残差の RMS [kN] | 全体：b / a [kN] / 相関 / 残差の RMS [kN] | b ÷ tanφ（直線） | 0.79〜0.97 の内か（直線） |")
         out("| --- | --- | --- | --- | --- |")
         res = {}
-        for col, label in [("M_cut", "cut_volume·ρ"), ("M_pile", "M_pile（V_pile·ρ/s）"), ("M_front", "front_soil_mass")]:
-            al, bl, rl = slope(lo[col], lo["Fx"])
-            aa, ba, ra = slope(B[col], B["Fx"])
-            res[col] = (bl, ba)
+        for col, label in [("M_cut", "cut_volume·ρ"), ("M_pile", "M_pile（V_pile·ρ/s）"),
+                           ("M_pile_ridge", "M_pile ＋ 横の畝"), ("M_front", "front_soil_mass")]:
+            al, bl, rl, el = slope(lo[col], lo["Fx"], rms=True)
+            aa, ba, ra, ea = slope(B[col], B["Fx"], rms=True)
+            res[col] = dict(r=(rl, ra), rms=(el, ea))
             inside = "内" if GATE5_BAND[0] <= bl <= GATE5_BAND[1] else "外"
-            out(f"| {label} | {bl:.3f} / {al / 1000:+.2f} / {rl:.2f} | {ba:.3f} / {aa / 1000:+.2f} / {ra:.2f} | "
+            out(f"| {label} | {bl:.3f} / {al / 1000:+.2f} / {rl:.3f} / {el / 1000:.2f} | {ba:.3f} / {aa / 1000:+.2f} / {ra:.3f} / {ea / 1000:.2f} | "
                 f"{bl / math.tan(math.radians(39.98)):.2f} | {inside} |")
         out("")
         out(f"関門5 の記録での値は {GATE5_REF}（cut_volume、直線の領域）。")
         out("")
+        # 横の範囲の見直しの基準：相関の差 ≥ 0.02、または残差の RMS が 5% 以上下がる
+        out("**横の畝を足したときの変化**（見直しの基準：相関の差 ≥ 0.02、または残差の RMS が 5% 以上下がる）")
+        out("")
+        out("| 領域 | 相関（M_pile → ＋畝） | 差 | 残差の RMS [kN]（M_pile → ＋畝） | 変化 | 基準を超えたか |")
+        out("| --- | --- | --- | --- | --- | --- |")
+        for k, lab in ((0, "直線の領域"), (1, "全体")):
+            r0, r1 = res["M_pile"]["r"][k], res["M_pile_ridge"]["r"][k]
+            e0, e1 = res["M_pile"]["rms"][k], res["M_pile_ridge"]["rms"][k]
+            over = (r1 - r0 >= 0.02) or (e1 <= 0.95 * e0)
+            out(f"| {lab} | {r0:.3f} → {r1:.3f} | {r1 - r0:+.3f} | {e0 / 1000:.2f} → {e1 / 1000:.2f} | {(e1 / e0 - 1) * 100:+.1f}% | {'はい' if over else 'いいえ'} |")
+        out("")
+
+    # ---- 6. 膨張率ごとの係数 ----
+    if a.swell:
+        swell_section(eps, load(a.swell), out)
 
     if a.report:
         with open(a.report, "w", encoding="utf-8") as f:
@@ -250,6 +274,47 @@ def main():
 
     if a.fig:
         plot(eps, B if isinstance(B, pd.DataFrame) else None, a.fig)
+
+
+def swell_section(base_eps, sw_eps, out):
+    """作業・膨張率の点ごとに、−F_x = a + b·M_pile·g の b（0.625 m ごとの平均、走り出しと深さを変えた直後の 1.5 s を除く。
+    作業の区切りの扱いは check_physics.settled_cut_rows と同じ）"""
+    out("## 6. 膨張率ごとの M_pile での係数（T17 の記録）")
+    out("")
+    out("作業・点ごとに、記録をまとめて −F_x = a + b·M_pile·g を当てはめた（0.625 m ごとの平均）。"
+        "ρ/s の換算が合っていれば、b は s によらない。base は T15 の記録（flat_cut・pile_push の各2本。flat_piecewise はなし）。"
+        "全体と、M_pile < 1,150 kg（V_pile < 1.0 m³）の区切りで求めた。")
+    out("")
+    out("| 作業 | 点（s） | 本数 | 区切り | 全体：b / a [kN] / 相関 | M_pile < 1,150 kg：b / 相関（区切り） |")
+    out("| --- | --- | --- | --- | --- | --- |")
+    groups = {}
+    for fname, name, df in list(base_eps) + list(sw_eps):
+        if not (name.startswith("ex_ident_") or name.startswith("ex_swell_flat_cut")):
+            continue
+        task = ("flat_cut" if "flat_cut" in name else "flat_piecewise" if "flat_piecewise" in name else "pile_push")
+        b = gate5_bins(df)
+        if b is None:
+            continue
+        s = float(df["label_swell"].iloc[0])
+        groups.setdefault((task, s, name.split("_")[-1] if "swell" not in name else "s110"), []).append(b)
+    summary = {}
+    for (task, s, point), bl in sorted(groups.items()):
+        B = pd.concat(bl)
+        aa, ba, ra = slope(B["M_pile"], B["Fx"])
+        lo = B[B["M_pile"] < 1150]
+        _, bl_, rl_ = slope(lo["M_pile"], lo["Fx"])
+        summary.setdefault(task, []).append((s, ba))
+        out(f"| {task} | {point}（{s:g}） | {len(bl)} | {len(B)} | {ba:.3f} / {aa / 1000:+.2f} / {ra:.2f} | {bl_:.3f} / {rl_:.2f}（{len(lo)}） |")
+    out("")
+    out("| 作業 | b（全体）の s への傾き db/ds（1.25〜1.31 の点） | b の範囲（全体） |")
+    out("| --- | --- | --- |")
+    for task, v in summary.items():
+        pts = [(s, b) for s, b in v if 1.2 <= s <= 1.35]
+        if len(pts) >= 2:
+            ss, bb = np.array(pts).T
+            k = np.polyfit(ss, bb, 1)[0]
+            out(f"| {task} | {k:+.2f}（{len(pts)} 点） | {min(b for _, b in v):.3f}〜{max(b for _, b in v):.3f} |")
+    out("")
 
 
 def plot(eps, B, path):
