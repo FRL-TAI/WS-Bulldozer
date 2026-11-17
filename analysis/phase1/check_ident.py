@@ -191,8 +191,11 @@ def main():
             # 回数を k 倍にすると水増しは 1/k、信号（水増しを引いた F）は変わらない。
             # 水増し ÷ F ≤ 0.5 ⇔ 水増し/k ≤ 信号 ⇔ k ≥ 水増し ÷ 信号
             k_frac = bias / F_sig if F_sig > 0 else math.inf
-            flags.append(f"{name}：p = {pv:.2g}、水増し ÷ F = {frac:.2f}。水増しを 50% 以下にするには、すべての点の回数を約 {k_frac:.1f} 倍"
-                         f"（{', '.join(f'{k} {math.ceil(nrep[k] * k_frac)}' for k in w)} 回）")
+            if math.isinf(k_frac):     # 水増しを引いた F が 0 以下（信号が見えない）
+                flags.append(f"{name}：p = {pv:.2g}、水増し ÷ F = {frac:.2f}。水増しを引いた F が 0 以下で、必要な回数は求まらない")
+            else:
+                flags.append(f"{name}：p = {pv:.2g}、水増し ÷ F = {frac:.2f}。水増しを 50% 以下にするには、すべての点の回数を約 {k_frac:.1f} 倍"
+                             f"（{', '.join(f'{k} {math.ceil(nrep[k] * k_frac)}' for k in w)} 回）")
     p("")
 
     # ---- 3. フィッシャー情報行列
