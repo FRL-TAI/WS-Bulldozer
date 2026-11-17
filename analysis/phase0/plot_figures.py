@@ -9,7 +9,7 @@
        cut_patterns     B3_patterns の時系列               → 図5
        cut_then_cut     B2_then_cut の時系列               → 図5（B2）
        settlement       B1_bands + B3_levels の締固めの記録 → calibration（--seg 0.5 1）→ 図6(a)・図7
-       settlement_then_cut  B2_then_cut の締固めの記録     → 図8
+       settlement_then_cut  B2_then_cut の締固めの記録     → 図8（区間ごとの値は図8 が segments_fig8.csv に書く）
        hardening_<条件>/{cut_bands,settlement}            → 図9〜11
   2. 図：実験A（図2〜4）は締固めの記録を check_compaction.py の関数で集計し、ほかは 1 の出力を読む。
      図1 はエピソードの定数から描く模式図。図8 は B2 の締固めの記録と較正曲線（calibrate_settlement.py の関数）から描く。
@@ -507,66 +507,113 @@ def calibration_curve(seg=1.0):
     return cs.build_curve(segments, 0.02)
 
 
-def then_cut_profile(path, cells_rows, curve, seg=1.0):
-    """B2 の1記録の、1 m 区間ごとの (x0, 逆算値, 地表の程度, 深さ方向の平均)（削る直前の値。履帯の位置のマス）"""
+MIN_CELLS = 2        # 区間に必要なマスの数（calibrate_settlement.py の --min-cells の既定）
+C_FLAT = 0.005       # 削る前の程度が 1.00 とみなす幅（|c − 1| ≤ これ）
+C_COMPACTED = 1.01   # 削る前の程度がこれを超えるマスを「踏み固めた」とする
+
+
+def then_cut_segments(path, cells_rows, curve, seg=1.0):
+    """B2 の1記録の 1 m 区間（区間の形は較正と同じ：履帯ごと、履帯の位置のマス、マス MIN_CELLS 以上）。
+    較正と違い、削る前の程度のばらつき（--homog）では除かない。区間は calibrate_settlement.make_segments で作る。
+    戻り値：区間ごとの dict（x0, 履帯, マスの数, S, 逆算値, 範囲外か, 削る前の地表の程度の統計, 深さ方向の平均, 境目か）"""
+    name = os.path.basename(path)
     rows = cc.load(path)
     cols, _ = cc.depth_columns(rows)
     t0 = cts.cut_start_time(cts.load(path))
     tb = cc.by_time(rows)
     t_cut = cc.nearest_time(sorted(tb), t0)
     snap = {(r["lane"], r["unity_ix"], r["unity_iy"]): r for r in tb[t_cut]}
-    seg_cells = defaultdict(list)
+    cells, depth = [], {}
     for c in cells_rows:
-        x = fl(c["x"])
-        r = next((v for k, v in snap.items() if k[0] == c["lane"] and abs(v["_x"] - x) < 1e-3), None)
-        col = cc.column_average(r, r, cols, 0.3125, 0.0, COL_DEPTH)[0] if r is not None else math.nan
-        seg_cells[(math.floor(x / seg))].append((fl(c["c_start"]), col, -fl(c["extra_mm"])))
-    out = []
-    for k in sorted(seg_cells):
-        v = np.array(seg_cells[k])
-        if len(v) < 2:
+        x, cst, S = fl(c["x"]), fl(c["c_start"]), -fl(c["extra_mm"])
+        if not all(math.isfinite(v) for v in (x, cst, S)):
             continue
-        S = float(np.mean(v[:, 2]))
-        out.append((k * seg, cs.invert(curve, S)[0], float(np.mean(v[:, 0])), float(np.nanmean(v[:, 1])), S))
+        r = next((v for k, v in snap.items() if k[0] == c["lane"] and abs(v["_x"] - x) < 1e-3), None)
+        depth[(c["group"], x)] = cc.column_average(r, r, cols, 0.3125, 0.0, COL_DEPTH)[0] if r is not None else math.nan
+        cells.append({"file": name, "group": c["group"], "x": x, "c": cst, "S": S})
+    segs, _ = cs.make_segments(cells, seg, math.inf, MIN_CELLS)
+    members = defaultdict(list)
+    for c in cells:
+        members[(c["group"], round(math.floor(c["x"] / seg) * seg, 6))].append(c)
+    out = []
+    for s in sorted(segs, key=lambda s: (s["group"], s["x0"])):
+        m = members[(s["group"], round(s["x0"], 6))]
+        assert len(m) == s["n"], (name, s["group"], s["x0"])
+        cv = np.array([c["c"] for c in m])
+        est, outr = cs.invert(curve, s["S"])
+        out.append({"x0": s["x0"], "track": s["group"], "n": s["n"], "S": s["S"], "est": est, "out": outr,
+                    "c_mean": float(cv.mean()), "c_sd": float(cv.std()), "c_min": float(cv.min()), "c_max": float(cv.max()),
+                    "depth": float(np.nanmean([depth[(c["group"], c["x"])] for c in m])),
+                    "boundary": bool((np.abs(cv - 1) <= C_FLAT).any() and (cv > C_COMPACTED).any())})
     return out
 
 
 def fig08(d, out):
+    from matplotlib.lines import Line2D
     curve = calibration_curve()
     cells = read_csv(A("settlement_then_cut", "cells.csv"))
-    meta = {os.path.basename(r["記録"])[:-4] + "_compaction.csv": int(r["seed"]) for r in MANIFEST
-            if r["実験"] == "B2_then_cut" and r["使う"].startswith("○")}
-    comp_files = [p for p in records("B2_then_cut", True)]
-    fig, axs = plt.subplots(1, 2, figsize=(8.6, 3.6), sharey=True)
-    res, pooled = {}, defaultdict(list)
-    for p in comp_files:
+    seeds = {os.path.basename(r["記録"])[:-4] + "_compaction.csv": int(r["seed"]) for r in MANIFEST
+             if r["実験"] == "B2_then_cut" and r["使う"].startswith("○")}
+    fig, axs = plt.subplots(1, 2, figsize=(8.6, 3.9), sharey=True)
+    table = []
+    LS = {"track_L": "-", "track_R": "--"}
+    for p in records("B2_then_cut", True):
         name = os.path.basename(p)
-        compacted = meta[name] % 2 == 0
-        prof = then_cut_profile(p, [c for c in cells if c["file"] == name], curve)
+        compacted = seeds[name] % 2 == 0
         ax = axs[0 if compacted else 1]
-        x = [v[0] + 0.5 for v in prof]
-        first = not ax.lines
-        ax.plot(x, [v[1] for v in prof], color=C1, marker="o", ms=4, label="Estimated (calibration curve)" if first else None)
-        ax.plot(x, [v[2] for v in prof], color=C2, marker="s", ms=4, ls="--", mfc="white",
-                label="Surface (before cutting)" if first else None)
-        ax.plot(x, [v[3] for v in prof], color=C3, marker="^", ms=4, ls=":",
-                label=f"Mean to {COL_DEPTH:.1f} m depth (before cutting)" if first else None)
-        for v in prof:
-            key = "compacted" if v[2] > 1.01 else "not compacted"
-            pooled[(compacted, key)].append(v)
+        segs = then_cut_segments(p, [c for c in cells if c["file"] == name], curve)
+        for tr in ("track_L", "track_R"):
+            ss = [s for s in segs if s["track"] == tr]
+            x = [s["x0"] + 0.5 for s in ss]
+            ax.plot(x, [s["c_mean"] for s in ss], color=C2, ls=LS[tr], lw=1, marker="s", ms=2.5, alpha=0.8)
+            ax.plot(x, [s["depth"] for s in ss], color=C3, ls=LS[tr], lw=1, marker="^", ms=2.5, alpha=0.8)
+            ax.plot(x, [s["est"] for s in ss], color=C1, ls=LS[tr], lw=1.2)
+            for xi, s in zip(x, ss):
+                ax.plot(xi, s["est"], ls="none", marker="X" if s["boundary"] else "o", ms=6 if s["boundary"] else 4.5,
+                        color=C1, mfc="white" if s["out"] else C1, mew=1.2, zorder=3)
+        for s in segs:
+            table.append({"file": name, "seed": seeds[name], "run": "compacted" if compacted else "control",
+                          "track": s["track"], "x0_m": f"{s['x0']:.1f}", "x1_m": f"{s['x0'] + 1:.1f}", "n_cells": s["n"],
+                          "S_mm": f"{s['S']:.2f}", "c_hat": f"{s['est']:.4f}", "out_of_range": int(s["out"]),
+                          "c_surface_mean": f"{s['c_mean']:.4f}", "c_surface_sd": f"{s['c_sd']:.4f}",
+                          "c_surface_min": f"{s['c_min']:.4f}", "c_surface_max": f"{s['c_max']:.4f}",
+                          f"c_depth_mean_{COL_DEPTH:.1f}m": f"{s['depth']:.4f}", "boundary": int(s["boundary"])})
     for ax, title in zip(axs, ("(a) Compacted by tracks (2 round trips), then cut", "(b) Control: cut without compaction")):
-        ax.axhline(1, color=INK2, lw=0.8, ls="--")
+        ax.axhline(1, color=INK2, lw=0.8, ls=":")
         ax.set(xlabel="x along path (from machine reference at start) [m]", title=title)
     axs[0].set_ylabel("Degree of compaction [-]")
-    axs[0].legend(fontsize=7.5, loc="upper right")
-    note(axs[1], "1 m segments, cells under tracks;\none line per run", "upper right")
+    h = [Line2D([], [], color=C1, marker="o", ms=4.5, label="Estimated (calibration curve)"),
+         Line2D([], [], color=C1, marker="o", ms=4.5, mfc="white", ls="none", label="Out of range (clipped)"),
+         Line2D([], [], color=C1, marker="X", ms=6, ls="none", label="Boundary segment"),
+         Line2D([], [], color=C2, marker="s", ms=2.5, label="Surface (before cutting)"),
+         Line2D([], [], color=C3, marker="^", ms=2.5, label=f"Mean to {COL_DEPTH:.1f} m depth (before cutting)"),
+         Line2D([], [], color=INK2, ls="-", label="Left track"),
+         Line2D([], [], color=INK2, ls="--", label="Right track")]
+    fig.legend(handles=h, fontsize=7.5, loc="lower center", ncol=4, bbox_to_anchor=(0.5, -0.1))
+    note(axs[1], "1 m segments per track, cells under tracks;\none line per run and track", "upper right")
     fig.tight_layout()
     save(fig, out, "fig08_natural_compaction.png")
-    for (compacted, key), vs in sorted(pooled.items()):
-        v = np.array(vs)
-        tag = ("B2 compacted run, " if compacted else "B2 control run, ") + key
-        res[tag] = (f"estimated {np.nanmean(v[:, 1]):.3f}, surface {np.nanmean(v[:, 2]):.3f}, "
-                    f"depth mean {np.nanmean(v[:, 3]):.3f}, S {np.nanmean(v[:, 4]):.1f} mm (n={len(v)} segments)")
+    p = A("settlement_then_cut", "segments_fig8.csv")
+    with open(p, "w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=list(table[0]))
+        w.writeheader()
+        w.writerows(table)
+    print(f"  -> {p}")
+    res = {}
+
+    def summary(rs, mean=False):
+        inr = [fl(r["c_hat"]) for r in rs if not int(r["out_of_range"])]
+        n_out = sum(int(r["out_of_range"]) for r in rs)
+        txt = f"in range {len(inr)}" + (f" ({min(inr):.3f}–{max(inr):.3f}" + (f", mean {np.mean(inr):.3f}" if mean else "") + ")"
+                                        if inr else "")
+        return txt + f", out of range {n_out} (of {len(rs)} segments)"
+    comp = [r for r in table if r["run"] == "compacted"]
+    ctrl = [r for r in table if r["run"] == "control"]
+    is_c = lambda r: fl(r["c_surface_mean"]) > C_COMPACTED
+    res["B2 compacted run, compacted (excl. boundary)"] = summary([r for r in comp if is_c(r) and not int(r["boundary"])])
+    res["B2 compacted run, boundary"] = summary([r for r in comp if int(r["boundary"])])
+    res["B2 compacted run, not compacted"] = summary([r for r in comp if not is_c(r) and not int(r["boundary"])], True)
+    res["B2 control run"] = summary(ctrl, True)
     return res
 
 
