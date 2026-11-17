@@ -87,15 +87,26 @@ episodes.jsonl の要約（running 中に値があったステップだけで集
 
 **`dataset_pile_push` の山の体積**は、`param_pile_length` × 3.0 m × `param_pile_height`（緩い状態の体積）で計算できる。時系列データの `cut_volume` は地山を削った分だけで、山の量は含まない。
 
-### 常に NaN の列
-時系列データの `front_soil_mass`（排土板の前の土の質量）と `excavated_volume_step`（そのステップの掘削体積）は、**常に NaN** で、使えない。
+### 排土板の前の土の質量・掘削体積の列
+時系列データの次の列は、Unity の `BladeStatePublisher.cs` が AGX 2.37 の Terrain の API（引数にショベルを取るもの。2.40 では Shovel 側に移り非推奨）で毎ステップ読む。この列を足す前の記録（本番データを含む）では、`front_soil_mass`・`excavated_volume_step` は常に NaN で、ほかの4列はない。
 
-- 理由：Unity の `BladeStatePublisher.cs` で、この2列を求める処理が `#if AGX_EXTRA_TERRAIN_API` の中にあり、このシンボルを定義していない。定義しても、`Terrain.getSoilParticleAggregate(shovel)` は AGX 2.37 の C# にはない（2.37 では TerrainToolCollection の側にある）のでコンパイルが通らない。`Terrain.getLastExcavatedVolume` は 2.37 にもある。
-- 本番データの再取得の前に、AGX の体積・質量の API（`getSoilAggregateMass`・`getInnerVolume` など）で取れるようにする予定（notes の decisions/2026-11-17_土の山の項の摩擦角と体積の入力.md）。
-- それまでは、土の山の量の代わりに `cut_volume`（地山を削った体積の積算。頭打ちの前だけ）を使う。
+| 列 | AGX の API | 中身 |
+| --- | --- | --- |
+| `front_soil_mass` | `getSoilAggregateMass(shovel, PRIMARY)` | 土塊（soil aggregate）の質量 [kg]。破壊領域で押しのけようとしている土と、inner shape の中の動く土 |
+| `front_soil_mass_deform` | `getSoilAggregateMass(shovel, DEFORM_BACK/RIGHT/LEFT)` の和 | 押しのけ・横への変形の土塊の質量 [kg]。このシーンの前進では常に 0 |
+| `front_dynamic_mass` | `getDynamicMass(shovel)` | inner shape の中の動く土（粒子と fluid mass）の質量 [kg] |
+| `front_inner_volume` | `getInnerVolume(shovel)` | inner shape の体積 [m³]。排土板の形で決まり、一定（0.301 m³） |
+| `front_dead_load_fraction` | `getLastDeadLoadFraction(shovel)` | inner shape のうち動く土で埋まっている割合 [-] |
+| `excavated_volume_step` | `getLastExcavatedVolume()` | 直前のステップに地形全体で掘削された体積 [m³] |
+
+使うときの注意（dirt_1 の flat_cut・pile_push で確かめた）：
+- **`front_soil_mass` は「排土板の前にたまった土の全体」ではない**。削り始めて約 2.5 m で 900〜1,000 kg 前後に頭打ちになり、`cut_volume` × ρ（10 m で約 3,900 kg）とは離れていく。前にたまった土のうち、地形に戻った分は含まれない。pile_push でも、山（約 2,070 kg）を押している間の値は 900〜1,000 kg 程度で、走り出す前（山に届く前）は 0 である。
+- `front_soil_mass` ≥ `front_dynamic_mass` で、差が破壊領域の土（まだ地形の側の土）に当たる。排土板を上げると両者は等しくなる。
+- `excavated_volume_step` は、ほとんどのステップで 0 で、ときどき大きな値が入る（積算は階段状）。積算は flat_cut で `cut_volume` の約 2 倍、pile_push で約 8 倍になる。地形に戻った土をもう一度掘削した分も数えるためと考えられ、削った地山の体積の代わりには使えない。
+- 土の山の量としては、引き続き `cut_volume`（地山を削った体積の積算。頭打ちの前だけ）を使う。`front_soil_mass` を使うかは、notes の docs/phase1.md §4.1 で決める。
 
 ## 3. 大きさの目安（関門7）
 | 項目 | 値 |
 | --- | --- |
-| 時系列データ 1 ファイル | 約 2.3 MB（約 1,500 行 × 89 列。関門7 の時点。現在は 91 列） |
+| 時系列データ 1 ファイル | 約 2.3 MB（約 1,500 行 × 89 列。関門7 の時点。現在は 100 列） |
 | 1,000 エピソード | 約 2.3 GB |

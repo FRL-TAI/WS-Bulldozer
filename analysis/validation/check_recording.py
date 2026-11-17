@@ -22,14 +22,15 @@ PERIOD_TARGET = 0.020        # 記録の周期の目標 [s] ( 50 Hz )
 PERIOD_TOL = 0.002           # 平均周期の許容誤差 [s]
 GAP_LIMIT = 0.050            # これより長い間隔を「取りこぼし」とみなす [s]
 
-# 今は NaN で正常な列 ( API を有効にするまで取得しない、または設定値がないと計算しない ) 
-EXPECTED_NAN = {"front_soil_mass", "excavated_volume_step",
-                "state_compaction_mean", "state_compaction_std", "slip_ratio"}
+# 今は NaN で正常な列 ( 設定値がないと計算しない ) 
+# front_soil_mass・excavated_volume_step は AGX の API で取るようにしたので外した（それより前の記録では NaN になる）
+EXPECTED_NAN = {"state_compaction_mean", "state_compaction_std", "slip_ratio"}
 
 # エピソード中に一定で正常な列
 EXPECTED_CONST_PREFIX = ("label_",)
 EXPECTED_CONST = {"episode_index", "episode_name", "seed", "phase", "leg", "ground_h0",
-                  "blade_width", "state_compaction_n", "target_depth", "depth_clipped"}
+                  "blade_width", "state_compaction_n", "target_depth", "depth_clipped",
+                  "front_inner_volume", "front_soil_mass_deform"}
 
 # 走行時間の目安 [s] ( ここにないエピソードは判定しない ) 
 EXPECTED_RUN_TIME = {
