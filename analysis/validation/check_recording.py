@@ -9,6 +9,7 @@
   1. 記録の周期        2. 時刻の単調性・重複   3. 欠損 ( NaN ) 
   4. 一定の列          5. ラベル              6. 進行状況の順番     7. 走行時間
   8. 折り返し（往復するエピソード ex_compaction_passes*・ex_compaction_then_cut* だけ）
+  9. 締固めの記録（締固めの記録を取る設定のエピソードだけ）
 
 折り返しでは、次のどれかに当たる記録を NG にする
 ( notes の decisions/2026-11-18_折り返しは進みの判定の別名版と失敗の検出で直す.md ) 。
@@ -27,9 +28,17 @@
 それ以外の値で一定な場合は、これまでどおり WARN にする
 ( notes の decisions/2026-11-17_粒子を含む高さの列とground_profileの扱い.md ) 。
 
+締固めの記録では、同じフォルダの episodes.jsonl で、その CSV の行の record_compaction が true なら
+「取る設定」とし、compaction_rows が 0（または値がない）か compaction_final が false なら NG にする。
+collect_data は Unity から締固めの記録が届かなくても status を ok にするため
+( notes の decisions/2026-11-18_T30・T31の未解決の扱い.md ) 。
+エピソードのクラスの RECORD_COMPACTION は使わない（T31 で ex_ident_* を True に変えたので、それより前の記録を誤って NG にする）。
+episodes.jsonl がない、その CSV の行がない、または record_compaction の値がない（旧形式）の記録は判定しない。
+
 エラーで途中終了したエピソードの CSV も点検できる ( 途中で切れていないか、NaN がないかの確認 ) 
 """
 import argparse
+import json
 import math
 import os
 import re
@@ -148,6 +157,48 @@ def check_turnaround(df, name):
     return ("OK" if want is not None else "WARN"), detail
 
 
+_JSONL_CACHE = {}
+
+
+def episode_summary(path):
+    """CSV と同じフォルダの episodes.jsonl から、その CSV の行を返す。なければ None"""
+    d = os.path.dirname(os.path.abspath(path))
+    if d not in _JSONL_CACHE:
+        rows = {}
+        jp = os.path.join(d, "episodes.jsonl")
+        if os.path.exists(jp):
+            with open(jp) as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        r = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if r.get("file"):
+                        rows[r["file"]] = r
+        _JSONL_CACHE[d] = rows
+    return _JSONL_CACHE[d].get(os.path.basename(path))
+
+
+def check_compaction_record(path):
+    """締固めの記録を取る設定のエピソードで、Unity から記録が届いたかを確かめる。対象外なら None"""
+    r = episode_summary(path)
+    if r is None or r.get("record_compaction") is not True:
+        return None
+    rows, final = r.get("compaction_rows"), r.get("compaction_final")
+    detail = f"compaction_rows {rows}、compaction_final {final}"
+    problems = []
+    if not rows:
+        problems.append("締固めの記録が届いていない（compaction_rows が 0 または値がない）")
+    if final is not True:
+        problems.append("締固めの最後の記録が届いていない（compaction_final が true でない）")
+    if problems:
+        return "NG", "；".join(problems) + "。" + detail
+    return "OK", detail
+
+
 def check_file(path, soil):
     df = pd.read_csv(path)
     res = []   # (項目, 判定, 詳細)
@@ -246,7 +297,7 @@ def check_file(path, soil):
 
     # 6. 進行状況の順番
     if "phase" in df:
-        phases = df["phase"].tolist()
+        phases = df["phase"].fillna("(欠損)").astype(str).tolist()   # 途中で切れた CSV では最後の行が欠ける
         seq = [p for i, p in enumerate(phases) if i == 0 or p != phases[i - 1]]
         counts = df["phase"].value_counts().to_dict()
         judge = "OK" if seq == PHASE_ORDER else "WARN"     # エラーで途中終了した場合は raising がない
@@ -268,6 +319,11 @@ def check_file(path, soil):
     # 8. 折り返し
     if name.startswith(TURN_PREFIX) and "phase" in df and "cmd_vx" in df:
         res.append(("折り返し", *check_turnaround(df, name)))
+
+    # 9. 締固めの記録
+    comp = check_compaction_record(path)
+    if comp is not None:
+        res.append(("締固めの記録", *comp))
 
     return name, df, res
 

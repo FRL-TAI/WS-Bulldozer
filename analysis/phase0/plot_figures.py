@@ -492,8 +492,8 @@ def fig07(d, out):
     rmse = lambda m: float(np.sqrt(np.mean(err[m] ** 2)))
     allm = np.ones_like(c, bool); low = c < 1.15; sat = (c > 1.11) & (c < 1.17)
     fig, ax = plt.subplots(figsize=(4.4, 4.2))
-    jit = (np.random.default_rng(0).random(len(c)) - 0.5) * 0.008
-    ax.scatter(c + jit, ch, s=12, color=C1, alpha=0.6, edgecolors="none", label="1 m segments, leave-one-run-out\n(x jittered by ±0.004)")
+    # 正解が K3（連続な値）なので x はずらさない（以前は設定した程度で並ぶ c_start のために ±0.004 ずらしていた）
+    ax.scatter(c, ch, s=12, color=C1, alpha=0.6, edgecolors="none", label="1 m segments, leave-one-run-out")
     ax.plot([0.75, 1.25], [0.75, 1.25], color=INK2, lw=1, ls="--", label="1:1")
     ax.set(xlim=(0.75, 1.25), ylim=(0.75, 1.25),
            xlabel="True degree of compaction" + (" (K3) " if OPTS.target == "c_cut_col3" else " ") + "[-]",
