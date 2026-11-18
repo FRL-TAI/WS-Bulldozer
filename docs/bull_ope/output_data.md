@@ -130,11 +130,13 @@ V_pile = Σ（範囲内のマス）max(h − h0, 0)·A ＋ M_dyn ÷ (ρ/s)
 | `bal_vol_pos`、`bal_vol_neg` | 刃先の後ろ 16 m〜前 3 m・±3 m の窓での Σ max(h − h0, 0)·A、Σ min(h − h0, 0)·A [m³]（収支の確認用） |
 | `pile_volume_vis` | 粒子を含む高さ場から求める幾何学的な山の体積 [m³]（T24）。V_pile と同じ範囲のマスで Σ max(max(hB, h) − h0, 0)·A。hB は AGX の `Terrain.getSoilParticleBoundedHeightField()`（地形と同じ頂点・同じ基準）。粒子の質量を ρ/s で換算しないので、s にラベルの値を使わない。**地形の経路の観測（s の情報源）にはこの列を使う**（notes の decisions/2026-11-18_地形の経路の観測は粒子を含む高さ場から求める体積にする.md） |
 | `pile_volume_vis_wide` | 同じ計算を、刃先の後ろ 1 m〜前 3 m・±2 m で求めた体積 [m³]（範囲の外にこぼれた土を含めるため） |
+| `vis_net_pos`、`vis_net_neg`、`vis_net` | 道すじ全体の体積の出入り [m³]（T25）。収支の窓（`bal_*` と同じ、刃先の後ろ 16 m〜前 3 m・±3 m）で、粒子を含む高さ hB と h0'（シーンを読み込んだ直後の同じ粒子を含む高さ場）の差の、正の部分 Σ max(hB − h0', 0)·A・負の部分 Σ max(h0' − hB, 0)·A（正の値）・その差。ΔV_net ≈ (s − 1)·V_cut で、地形の経路の s の観測にする（notes の decisions/2026-11-18_sの判定は道すじ全体の体積の出入りで行う.md） |
 
 - `bal_*` は 25 ステップ（0.5 s）ごとに求め、間は前の値を出す。地形全体の質量（`calculateTotalMass`）も一時は出していたが、1回に約 0.3 s かかって Unity が止まり、深さの制御が乱れた（深さのずれの 95% 点が 2〜4 cm → 9〜19 cm）ので外した。
 - `pile_volume`（V_pile）の粒子の分は s のラベルの値で換算するので、V_pile が s で変わるのは計算の作りによる。V_pile は力の経路の入力としてだけ使い、地形の経路の s の観測には使わない。
-- 粒子を含む高さ場が取れないか、解像度が地形と違うときは、`pile_volume_vis`・`pile_volume_vis_wide` は NaN。この列を足す前の記録にはない。
-- 解析は `analysis/phase1/check_pile_volume.py`（V_pile）、`analysis/phase1/check_pile_volume_vis.py`（`pile_volume_vis` と V_pile・膨張率の比較）。
+- 粒子を含む高さ場が取れないか、解像度が地形と違うときは、`pile_volume_vis`・`pile_volume_vis_wide`・`vis_net_*` は NaN。これらの列を足す前の記録にはない。
+- `vis_net_*` は 50 ステップ（1 s）ごとに求め、間は前の値を出す。ただし、進行状況が raising の間と進行状況が変わった回は毎回求めるので、エピソードの最後の行の値は新しい。h0' は TerrainData ではなく粒子を含む高さ場から読むので、0.46 mm の差は入らない。
+- 解析は `analysis/phase1/check_pile_volume.py`（V_pile）、`analysis/phase1/check_pile_volume_vis.py`（`pile_volume_vis` と V_pile・膨張率の比較）、`analysis/phase1/check_vis_net.py`（`vis_net` と膨張率）。
 
 ### 前方の地面の高さの列（T23）
 `ground_ahead`・`ground_profile_*` は Unity の TerrainData（AGX の地形の高さ場を毎ステップ書き戻したもの）を読むので、粒子（動く土）を含まず、1ステップ（20 ms）遅れる。地形の経路と模擬 LiDAR のために、同じ8点（刃先の中点から水平の前方 25 cm ごと、25〜200 cm）で次の列を足した（notes の decisions/2026-11-17_粒子を含む高さの列とground_profileの扱い.md）。Unity の `BladeStatePublisher.cs` が求める。この列を足す前の記録にはない。
