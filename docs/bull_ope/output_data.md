@@ -132,6 +132,23 @@ V_pile = Σ（範囲内のマス）max(h − h0, 0)·A ＋ M_dyn ÷ (ρ/s)
 - `bal_*` は 25 ステップ（0.5 s）ごとに求め、間は前の値を出す。地形全体の質量（`calculateTotalMass`）も一時は出していたが、1回に約 0.3 s かかって Unity が止まり、深さの制御が乱れた（深さのずれの 95% 点が 2〜4 cm → 9〜19 cm）ので外した。
 - 解析は `analysis/phase1/check_pile_volume.py`。
 
+### 前方の地面の高さの列（T23）
+`ground_ahead`・`ground_profile_*` は Unity の TerrainData（AGX の地形の高さ場を毎ステップ書き戻したもの）を読むので、粒子（動く土）を含まず、1ステップ（20 ms）遅れる。地形の経路と模擬 LiDAR のために、同じ8点（刃先の中点から水平の前方 25 cm ごと、25〜200 cm）で次の列を足した（notes の decisions/2026-11-17_粒子を含む高さの列とground_profileの扱い.md）。Unity の `BladeStatePublisher.cs` が求める。この列を足す前の記録にはない。
+
+| 列 | 中身 |
+| --- | --- |
+| `ground_profile_025cm`〜`200cm` | 地形の高さ場（Unity の TerrainData、`Terrain.SampleHeight`）[m]。粒子を含まない。1ステップ遅れる。これまでの記録と比べるために残す |
+| `ground_ahead` | 刃先の前 0.5 m の地形の高さ [m]。**`ground_profile_050cm` と同じ点・同じ値**。本番データのカラムを作り直すとき（フェーズ2）に整理する |
+| `ground_terrain_025cm`〜`200cm` | 同じ点の、AGX の地形の高さ場（`Terrain.getHeight`）を直接読んだ高さ [m]。4つの頂点の双一次補間。1ステップの遅れがない。粒子は含まない |
+| `ground_vis_025cm`〜`200cm` | 同じ点の、粒子を含む高さ [m]。AGX の `Terrain.getSoilParticleBoundedHeightField()`（粒子を包む高さ場。地形と同じ 257×257 の頂点・同じ基準）を双一次補間し、`ground_terrain_*` との大きいほうを取る。**地形の経路・模擬 LiDAR にはこの列を使う** |
+| `ground_ptop_025cm`〜`200cm` | 確かめ用。最寄りの頂点の地形の高さと、その頂点に割り当てた粒子の上端（中心の高さ ＋ 半径）の最大の、大きいほう [m]（`PileVolume.cs` の粒子の走査で求める） |
+
+- 高さはすべてワールドの高さ。AGX の高さ ＋ Terrain の transform の高さがワールドの高さになる（再生中は transform を MaximumDepth だけ下げてあるため）。
+- **平らな地面でも、AGX から読む列（`ground_terrain_*`・`ground_vis_*`・`ground_ptop_*`）は、TerrainData から読む列と `ground_h0` より 0.46 mm 低い**（TerrainData の高さの量子化によると考えられる。確かめていない）。`check_recording.py` は、走行中に一定な前方の高さの列を、`ground_h0` との差が 1 mm 以内なら正常とする。
+- **前方の地面の高さが走行中に一定になるのは正常**。平らな地面を削る作業では、刃先の前 1.0〜1.25 m（山の大きい 12 cm でも 1.5 m）より先は手つかずの平らな地面なので、高さは `ground_h0` のまま変わらない（pile_push では山が前にある間は変わる）。
+- 粒子は少数で大きい（基準の flat_cut・pile_push で 35〜42 個、1 個 平均 約 25 kg。Console に出た2個の半径は 0.066・0.104 m、平均の質量からは約 0.15 m）。すべて排土板の上端（刃先の後ろ 0.34 m）〜刃先の前 0.5 m にあるので、粒子で高くなるのは 25 cm と 50 cm の点だけである（25 cm の点で、走行中の 54〜70% の行で `ground_terrain_*` より 1 mm 以上高い。75 cm より先は `ground_terrain_*` と同じ）。土の山の本体（刃先の後ろ 0.34 m〜前 0.25 m）は8点の範囲の外にある。
+- 処理時間は、粒子を含む高さ場の読み出しと補間で平均 0.017 ms（最大 0.14 ms）、`BladeStatePublisher` の配信全体で平均 0.43〜0.62 ms（1ステップ 20 ms）。深さのずれの 95% 点（1.9〜2.2 cm）は変わらなかった。
+
 ## 3. 大きさの目安（関門7）
 | 項目 | 値 |
 | --- | --- |

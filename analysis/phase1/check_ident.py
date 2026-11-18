@@ -183,6 +183,8 @@ def main():
     ap.add_argument("--s-step", type=float, default=0.06, choices=sorted(S_DESIGNS), help="膨張率の中心差分の刻み（既定 0.06）")
     ap.add_argument("--noise-check", action="store_true",
                     help="κ を使わない水増しの見積もり（半分割り）と信号のばらつきを足す（T20。既定では出さない）")
+    ap.add_argument("--boot-raw", action="store_true",
+                    help="3 のブートストラップを、偏りを引かない標本で求める（T23 より前と同じ）")
     ap.add_argument("--report", help="結果を Markdown で保存するファイル")
     a = ap.parse_args()
     set_s_step(a.s_step)
@@ -291,20 +293,31 @@ def main():
     # ブートストラップ：点ごとに記録を選び直して J を求め直し、3つ同時の下限のばらつきを見る（Σ は固定）
     rng = np.random.default_rng(0)
     B = 1000
-    boot, boot_corr, nonpd = [], [], 0
+    Fbl = []
     for _ in range(B):
         mb = {k: X[k][rng.integers(0, len(X[k]), len(X[k]))].mean(axis=0) for k in X}
         Jb = np.column_stack([sum(wt * mb[k] for k, wt in DESIGN[n][1].items()) for n in names])
-        Fb = Jb.T @ Sinv @ Jb
+        Fbl.append(Jb.T @ Sinv @ Jb)
+    Fbl = np.array(Fbl)
+    bias_ratio = np.diag(Fbl.mean(axis=0)) / np.diag(F)
+    # 選び直した F の平均は点推定より大きく偏るので、各標本から偏り（標本の平均 − 点推定、行列ごと）を引く（T23）
+    if not a.boot_raw:
+        Fbl = Fbl - (Fbl.mean(axis=0) - F)
+    boot, boot_corr, nonpd = [], [], 0
+    for Fb in Fbl:
         Fbs = Fb - np.diag([infl[n] for n in names])
         if np.linalg.eigvalsh(Fbs).min() <= 0:
             nonpd += 1
+        if np.linalg.eigvalsh(Fb).min() <= 0:
+            continue
         Mi = np.linalg.inv(Fb)
         sdb = np.sqrt(np.diag(Mi))
         boot.append(sdb)
         boot_corr.append([Mi[i, j] / sdb[i] / sdb[j] for i, j in pairs])
     boot, boot_corr = np.array(boot), np.array(boot_corr)
-    p(f"**ブートストラップ**（点ごとに記録を選び直す、{B} 回、Σ は固定。「そのまま」の F で求めた{len(names)}つ同時の下限）\n")
+    p(f"**ブートストラップ**（点ごとに記録を選び直す、{B} 回、Σ は固定。「そのまま」の F で求めた{len(names)}つ同時の下限。"
+      + ("偏りを引かない標本（--boot-raw）" if a.boot_raw else "各標本から偏り（標本の平均 − 点推定）を引いた標本")
+      + f"。偏り（F の対角の標本の平均 ÷ 点推定）{'・'.join(f'{x:.3f}' for x in bias_ratio)}、そのままの F が正定値の標本 {len(boot) / B:.0%}）\n")
     p("| パラメータ | 中央値 | 5〜95% |")
     p("|---|---|---|")
     for i, n in enumerate(names):

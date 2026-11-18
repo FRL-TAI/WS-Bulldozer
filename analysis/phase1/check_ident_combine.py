@@ -14,6 +14,8 @@
   - F そのまま（雑音の水増しを含むので楽観的）
   - 目安：対角から水増しを引いた F で1つだけのときの下限 × （そのままの F での 同時 ÷ 1つだけ）
   - ブートストラップ：作業ごと・点ごとに記録を選び直して F を作り直し、そのままの F の3つ同時の下限の 5〜95%
+    選び直した F の平均は点推定より大きく偏るので、各標本から偏り（標本の平均 − 点推定、行列ごと）を引いてから
+    下限・相関・正定値でない割合を求める（T23。--boot-raw で T21 より前と同じ、偏りを引かない値）
 """
 import argparse
 import itertools
@@ -138,6 +140,8 @@ def main():
     ap.add_argument("--s-step", type=float, default=0.06, choices=sorted(S_DESIGNS), help="膨張率の中心差分の刻み（既定 0.06）")
     ap.add_argument("--boot-check", action="store_true",
                     help="信号 ÷ ブートストラップの標準偏差と、下限の 16〜84% の幅を足す（T21。既定では出さない）")
+    ap.add_argument("--boot-raw", action="store_true",
+                    help="2 の表のブートストラップの幅を、偏りを引かない標本で求める（T23 より前と同じ）")
     ap.add_argument("--report")
     a = ap.parse_args()
     set_s_step(a.s_step)
@@ -197,9 +201,12 @@ def main():
         single_raw = 1 / np.sqrt(np.diag(F))
         single_sig = np.array([1 / math.sqrt(x) if x > 0 else math.nan for x in np.diag(Fs)])
         js = joint(Fs)
+        Fbl = np.array([sum(boot_F(tasks[t], rng) for t in c) for _ in range(a.boot)])
+        bias_ratio = np.diag(Fbl.mean(axis=0)) / np.diag(F)
+        if not a.boot_raw:
+            Fbl = Fbl - (Fbl.mean(axis=0) - F)      # 偏りを引いた標本（T23）
         boots, nonpd = [], 0
-        for _ in range(a.boot):
-            Fb = sum(boot_F(tasks[t], rng) for t in c)
+        for Fb in Fbl:
             r = joint(Fb)
             if r is not None:
                 boots.append(np.r_[r[0], [r[1][i, j] for i, j in pairs]])
@@ -207,9 +214,13 @@ def main():
             if np.linalg.eigvalsh(Fbs).min() <= 0:
                 nonpd += 1
         boots = np.array(boots)
-        rows.append(dict(c=c, jr=jr, js=js, ev_s=float(np.linalg.eigvalsh(Fs).min()), single_raw=single_raw, single_sig=single_sig, boots=boots, nonpd=nonpd / a.boot))
+        rows.append(dict(c=c, jr=jr, js=js, ev_s=float(np.linalg.eigvalsh(Fs).min()), single_raw=single_raw, single_sig=single_sig, boots=boots,
+                         nonpd=nonpd / a.boot, pd_raw=len(boots) / a.boot, bias=bias_ratio))
 
     p(f"**{len(NAMES)}つ同時の推定標準偏差の下限（範囲比）**\n")
+    p("ブートストラップの幅は、" + ("偏りを引かない標本（--boot-raw）" if a.boot_raw else
+      "各標本から偏り（標本の平均 − 点推定、行列ごと）を引いた標本") + "で求めた。"
+      "偏り（F の対角の標本の平均 ÷ 点推定）と、そのままの F が正定値の標本の割合も並べる。\n")
     p(f"| 組み合わせ | {NAMES[0]}（そのまま／目安／ブートストラップ 5〜95%） | " + " | ".join(NAMES[1:]) + " | 水増しを引いた F で直接 |")
     p("|---|" + "---|" * (len(NAMES) + 1))
     for r in rows:
@@ -224,6 +235,10 @@ def main():
         direct = ("、".join(f"{n} {x:.3f}" for n, x in zip(NAMES, r["js"][0])) + f"（最小の固有値 {r['ev_s']:.1f}）" if r["js"] is not None
                   else f"正定値でない（ブートストラップで {r['nonpd']:.0%}）")
         p(f"| {' ＋ '.join(r['c'])} | " + " | ".join(cells) + f" | {direct} |")
+    p("\n| 組み合わせ | 偏り（F の対角の標本の平均 ÷ 点推定、" + "・".join(NAMES) + "） | そのままの F が正定値の標本 |")
+    p("|---|---|---|")
+    for r in rows:
+        p(f"| {' ＋ '.join(r['c'])} | " + "・".join(f"{x:.3f}" for x in r["bias"]) + f" | {r['pd_raw']:.0%} |")
     p("\n**推定値の相関（そのままの F）と条件数**\n")
     p("相関の括弧内はブートストラップの 5〜95%。\n")
     p("| 組み合わせ | " + " | ".join(pair_lab) + " | 条件数 |")

@@ -13,6 +13,11 @@
 想定どおりとする。あとから足した列 ( NEW_COLS ) がない記録、front_soil_mass・excavated_volume_step が
 全行 NaN の記録は「旧形式」と表示し、NG にしない ( 一定の列の判定からも外す ) 。
 
+一定の列では、前方の地面の高さの列 ( GROUND_AHEAD_PREFIX ) が走行中に一定で、その値が ground_h0 と一致する
+( 差が GROUND_CONST_TOL 以内 ) 場合は、手つかずの平らな地面を読んでいるので正常とする。
+それ以外の値で一定な場合は、これまでどおり WARN にする
+( notes の decisions/2026-11-17_粒子を含む高さの列とground_profileの扱い.md ) 。
+
 エラーで途中終了したエピソードの CSV も点検できる ( 途中で切れていないか、NaN がないかの確認 ) 
 """
 import argparse
@@ -47,6 +52,12 @@ EXPECTED_CONST_PREFIX = ("label_",)
 EXPECTED_CONST = {"episode_index", "episode_name", "seed", "phase", "leg", "ground_h0",
                   "blade_width", "state_compaction_n", "target_depth", "depth_clipped",
                   "front_inner_volume", "front_soil_mass_deform"}
+
+# 走行中に一定でも、値が ground_h0 と一致すれば正常な列 ( 前方の地面の高さ。刃先の前 1〜1.25 m より先は手つかずの平らな地面 ) 
+GROUND_AHEAD_PREFIX = ("ground_ahead", "ground_profile_", "ground_terrain_", "ground_vis_", "ground_ptop_")
+# ground_h0 との差の許容 [m]。ground_h0 は Unity の TerrainData から、ground_terrain_*・ground_vis_*・
+# ground_ptop_* は AGX の高さから読むので、平らな地面でも 0.46 mm ずれる（T23）。1 mm までを一致とみなす
+GROUND_CONST_TOL = 1e-3
 
 # 走行時間の目安 [s] ( ここにないエピソードは判定しない ) 
 EXPECTED_RUN_TIME = {
@@ -121,8 +132,15 @@ def check_file(path, soil):
                  if run[c].nunique(dropna=False) <= 1
                  and c not in EXPECTED_CONST and not c.startswith(EXPECTED_CONST_PREFIX)
                  and c not in EXPECTED_NAN and c not in old_all_nan]
-        res.append(("一定の列 ( 走行中 ) ", "OK" if not const else "WARN",
-                    "想定外に一定: " + (", ".join(const) or "なし")))
+        # 前方の地面の高さで、一定の値が ground_h0 と一致する列は正常とする
+        h0 = run["ground_h0"].iloc[0] if "ground_h0" in run else np.nan
+        flat = [c for c in const if c.startswith(GROUND_AHEAD_PREFIX)
+                and np.isfinite(h0) and abs(float(run[c].iloc[0]) - float(h0)) <= GROUND_CONST_TOL]
+        const = [c for c in const if c not in flat]
+        detail = "想定外に一定: " + (", ".join(const) or "なし")
+        if flat:
+            detail += " / ground_h0 と一致して一定 ( 正常 ) : " + ", ".join(flat)
+        res.append(("一定の列 ( 走行中 ) ", "OK" if not const else "WARN", detail))
 
     if soil is None:
         res.append(("ラベル", "OK", "確認しない（--no-label）"))

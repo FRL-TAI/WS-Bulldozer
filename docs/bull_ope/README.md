@@ -208,7 +208,8 @@ N_CUT=0 N_PW=0 N_PILE=30 OUT=data/production_pile \
 | | `blade_width`、`blade_alpha_deg` | 排土板の幅（2.96 m）、排土板の角度 [deg]（刃先から上端へのベクトルと、後ろ向きの水平のなす角。下げると約 71°） |
 | 地面の高さ（blade_state） | `ground_below` | 刃先の真下の地面の高さ [m]。削っている間は、まだ切り取られていない土と土の山の表面になる（削った後の地面ではない） |
 | | `ground_behind` | 刃先から 0.3 m 後ろの地面の高さ [m]。削った後の地面（刃先の高さとほぼ同じ） |
-| | `ground_ahead`、`ground_profile_025cm`〜`200cm` | 刃先から 0.5 m 前方、および 25 cm ごとに 8 点の前方の地面の高さ [m] |
+| | `ground_ahead`、`ground_profile_025cm`〜`200cm` | 刃先から 0.5 m 前方、および 25 cm ごとに 8 点の前方の地形の高さ [m]（Unity の TerrainData。粒子を含まず、1ステップ遅れる）。`ground_ahead` は `ground_profile_050cm` と同じ値。平らな地面では刃先の前 1.0〜1.25 m より先が `ground_h0` のまま一定になるのは正常 |
+| | `ground_terrain_*`、`ground_vis_*`、`ground_ptop_*`（025cm〜200cm） | 同じ 8 点の、AGX から直接読んだ地形の高さ、粒子を含む高さ（地形の経路・模擬 LiDAR に使う）、確かめ用の粒子の上端 [m]（T23。中身と注意は output_data.md の「前方の地面の高さの列」。足す前の記録にはない） |
 | 土の状態（blade_state） | `state_compaction_mean/std/n` | 刃先の前 1 m・排土板の幅の範囲の、地表の締固めの程度の平均・標準偏差・マスの数 |
 | | `front_soil_mass`、`front_soil_mass_deform`、`front_dynamic_mass`、`front_inner_volume`、`front_dead_load_fraction`、`excavated_volume_step` | 排土板の前の土塊・動く土の質量 [kg]、inner shape の体積と埋まっている割合、直前のステップの掘削体積 [m³]（AGX の API。中身と注意は output_data.md の「排土板の前の土の質量・掘削体積の列」。足す前の記録では NaN） |
 | | `pile_*`、`dyn_*`、`bal_*` | 土の山の体積 V_pile（地形の高さ ＋ 粒子 ÷ (ρ/s)）とその内訳・感度用の範囲、地形全体の動く土、収支の確認用の窓の体積（T15。中身は output_data.md の「土の山の体積の列」） |
