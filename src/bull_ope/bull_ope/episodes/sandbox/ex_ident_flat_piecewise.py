@@ -7,7 +7,7 @@
 エピソード名は ex_ident_flat_piecewise_<点の名前>。
 """
 from ..episode import Command, Episode
-from .ex_ident_flat_cut import BASE_SOIL, COMPACTION_POINTS, POINTS, make_compaction_class
+from .ex_ident_flat_cut import BASE_SOIL, COMPACTION_POINTS_ALL, POINTS, make_compaction_class
 
 
 class _IdentFlatPiecewise(Episode):
@@ -48,8 +48,8 @@ for _key, _change in POINTS.items():
     globals()[_cls.__name__] = _cls
 
 # 締固めの列（T34。decisions/2026-11-18_締固めの列は折れ目の両側で別々に判定する.md）。
-# 設定の範囲は 14 m 進んだ刃先の先まで（x −5〜18 m）
-for _key, _value in COMPACTION_POINTS.items():
+# 設定の範囲は 14 m 進んだ刃先の先まで（x −5〜18 m）。0.97・1.03（k_m0p03・k_p0p03）は T35 で足した
+for _key, _value in COMPACTION_POINTS_ALL.items():
     _cls = make_compaction_class(_IdentFlatPiecewise, __name__, "flat_piecewise", _key, _value, "14 m を深さ 12→6→9 cm で削る", rect=(-5.0, 18.0, -2.5, 2.5))
     globals()[_cls.__name__] = _cls
 

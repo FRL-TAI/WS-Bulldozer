@@ -46,12 +46,14 @@ COMPACTION_POINTS = {
     "k_m0p06": 0.94,   # 締固め − 0.06（範囲 0.90〜1.20 の幅 0.30 の −20%）
     "k_p0p06": 1.06,   # 締固め + 0.06
 }
-# flat_cut だけの折れ目の幅を確かめる点（T34）
+# 折れ目の幅を確かめる点（T34 は flat_cut だけ、T35 で flat_piecewise・pile_push にも足した。
+# decisions/2026-11-18_緩い側の凸を3作業の±0.03で確かめる.md）
 COMPACTION_POINTS_FLAT_CUT = {
     **COMPACTION_POINTS,
     "k_m0p03": 0.97,   # 締固め − 0.03
     "k_p0p03": 1.03,   # 締固め + 0.03
 }
+COMPACTION_POINTS_ALL = COMPACTION_POINTS_FLAT_CUT   # 3作業で共通の点（T35）
 COMPACTION_DEPTH = 0.8          # 設定する深さ [m]（phase0 の帯と同じ。実験A で締固めが届いた深さ）
 COMPACTION_RECT = (-5.0, 14.0, -2.5, 2.5)   # エピソード座標（開始時の刃先の中点が原点）の x_start, x_end, y_min, y_max [m]
                                             # 開始時の履帯（刃先の約 3.9〜1.7 m 後ろ）から 10 m 進んだ刃先の先までを覆う
