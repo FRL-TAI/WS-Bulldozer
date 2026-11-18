@@ -9,7 +9,7 @@
 点を足すときは POINTS に1行足す（例：c の片側差分 "c_p1500": {"cohesion": 3600.0}）。
 刻みの決め方は notes の decisions/2026-11-17_差分の刻みと基準の点.md、docs/phase1.md §5。
 """
-from ..episode import Command, Episode
+from ..episode import Command, Episode, TerrainOp
 
 # 基準の土質（OperaSim の TerrainMaterial（dirt_1）の設定値。膨張率はシーンの asset の値）
 BASE_SOIL = {"cohesion": 2100.0, "friction_angle_deg": 39.98, "density": 1474.0, "swell_factor": 1.28}
@@ -39,6 +39,17 @@ POINTS = {
     # s = 1.10 の flat_cut は、T12 の ex_swell_flat_cut_s110（ex_maxdensity.py。操作は同じ）を使う
 }
 
+# 締固めの列（T33。decisions/2026-11-18_締固めの列のJは締固めを動かす取り直しで作る.md）
+# 点の名前 → 初期の地面に設定する締固めの程度（phase0 の帯と同じ compaction_rect。地表から COMPACTION_DEPTH まで）。
+# 土質は基準のまま。ここにない点は地形を加工しない（今までと同じ動作）。
+COMPACTION_POINTS = {
+    "k_m0p06": 0.94,   # 締固め − 0.06（範囲 0.90〜1.20 の幅 0.30 の −20%）
+    "k_p0p06": 1.06,   # 締固め + 0.06
+}
+COMPACTION_DEPTH = 0.8          # 設定する深さ [m]（phase0 の帯と同じ。実験A で締固めが届いた深さ）
+COMPACTION_RECT = (-5.0, 14.0, -2.5, 2.5)   # エピソード座標（開始時の刃先の中点が原点）の x_start, x_end, y_min, y_max [m]
+                                            # 開始時の履帯（刃先の約 3.9〜1.7 m 後ろ）から 10 m 進んだ刃先の先までを覆う
+
 
 class _IdentFlatCut(Episode):
     """共通部分（name がないので一覧には出ない）"""
@@ -54,6 +65,35 @@ class _IdentFlatCut(Episode):
 
     def operation(self, obs):
         return Command(speed=self.SPEED, depth=self.DEPTH)
+
+
+class _IdentFlatCutCompaction(_IdentFlatCut):
+    """締固めの列の点（初期の地面の締固めの程度を COMPACTION で設定する）"""
+    REQUIRES_GRID_CONTROL = True
+    COMPACTION = 1.0
+
+    def sample_params(self, rng):
+        d = super().sample_params(rng)
+        d.update(compaction=self.COMPACTION, compaction_depth=COMPACTION_DEPTH)
+        return d
+
+    def terrain_ops(self):
+        x0, x1, y0, y1 = COMPACTION_RECT
+        return [TerrainOp("compaction_rect", x0, x1, y0, y1, value=self.COMPACTION, depth=COMPACTION_DEPTH)]
+
+
+def _make_compaction(key, value):
+    soil = dict(BASE_SOIL)
+    attrs = {
+        "__module__": __name__,
+        "__doc__": f"同定可能性の flat_cut：初期の地面の締固めの程度 {value:g}",
+        "name": f"ex_ident_flat_cut_{key}",
+        "description": f"【同定可能性】初期の地面の締固めの程度を {value:g} にして、深さ 9 cm で 10 m 削る（要 AGX_GRID_CONTROL）",
+        "SOIL_RANGES": {k: (v, v) for k, v in soil.items()},
+        "POINT": key,
+        "COMPACTION": float(value),
+    }
+    return type(f"IdentFlatCut_{key}", (_IdentFlatCutCompaction,), attrs)
 
 
 def _make(key, change):
@@ -73,4 +113,8 @@ def _make(key, change):
 
 for _key, _change in POINTS.items():
     _cls = _make(_key, _change)
+    globals()[_cls.__name__] = _cls
+
+for _key, _value in COMPACTION_POINTS.items():
+    _cls = _make_compaction(_key, _value)
     globals()[_cls.__name__] = _cls

@@ -34,6 +34,9 @@ collect_data は Unity から締固めの記録が届かなくても status を 
 ( notes の decisions/2026-11-18_T30・T31の未解決の扱い.md ) 。
 エピソードのクラスの RECORD_COMPACTION は使わない（T31 で ex_ident_* を True に変えたので、それより前の記録を誤って NG にする）。
 episodes.jsonl がない、その CSV の行がない、または record_compaction の値がない（旧形式）の記録は判定しない。
+限界：collect_data を使わずに取った記録（test_episode で単発で取った記録、v2 の確かめの turnaround_v2/ など）には
+episodes.jsonl がないので、この項目は判定されない。その記録を点検するときは、隣の <名前>_compaction.csv の有無を自分で確かめる
+（本番の再取得は collect_data で行うので影響しない。notes の T33）。
 
 エラーで途中終了したエピソードの CSV も点検できる ( 途中で切れていないか、NaN がないかの確認 ) 
 """
