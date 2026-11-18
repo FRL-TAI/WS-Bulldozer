@@ -128,9 +128,13 @@ V_pile = Σ（範囲内のマス）max(h − h0, 0)·A ＋ M_dyn ÷ (ρ/s)
 | `dyn_mass_particle_near` | 上端〜刃先の前 0.5 m・±1.48 m の粒子の質量 [kg]（参考） |
 | `dyn_mass_particle_total`、`dyn_mass_fluid_total`、`dyn_mass_total`、`dyn_num_particles` | 地形全体の粒子の質量、fluid mass（`calculateTotalFluidMass`）、動く土の合計（`calculateTotalDynamicMass`。粒子 ＋ fluid に一致）[kg]、粒子の数 |
 | `bal_vol_pos`、`bal_vol_neg` | 刃先の後ろ 16 m〜前 3 m・±3 m の窓での Σ max(h − h0, 0)·A、Σ min(h − h0, 0)·A [m³]（収支の確認用） |
+| `pile_volume_vis` | 粒子を含む高さ場から求める幾何学的な山の体積 [m³]（T24）。V_pile と同じ範囲のマスで Σ max(max(hB, h) − h0, 0)·A。hB は AGX の `Terrain.getSoilParticleBoundedHeightField()`（地形と同じ頂点・同じ基準）。粒子の質量を ρ/s で換算しないので、s にラベルの値を使わない。**地形の経路の観測（s の情報源）にはこの列を使う**（notes の decisions/2026-11-18_地形の経路の観測は粒子を含む高さ場から求める体積にする.md） |
+| `pile_volume_vis_wide` | 同じ計算を、刃先の後ろ 1 m〜前 3 m・±2 m で求めた体積 [m³]（範囲の外にこぼれた土を含めるため） |
 
 - `bal_*` は 25 ステップ（0.5 s）ごとに求め、間は前の値を出す。地形全体の質量（`calculateTotalMass`）も一時は出していたが、1回に約 0.3 s かかって Unity が止まり、深さの制御が乱れた（深さのずれの 95% 点が 2〜4 cm → 9〜19 cm）ので外した。
-- 解析は `analysis/phase1/check_pile_volume.py`。
+- `pile_volume`（V_pile）の粒子の分は s のラベルの値で換算するので、V_pile が s で変わるのは計算の作りによる。V_pile は力の経路の入力としてだけ使い、地形の経路の s の観測には使わない。
+- 粒子を含む高さ場が取れないか、解像度が地形と違うときは、`pile_volume_vis`・`pile_volume_vis_wide` は NaN。この列を足す前の記録にはない。
+- 解析は `analysis/phase1/check_pile_volume.py`（V_pile）、`analysis/phase1/check_pile_volume_vis.py`（`pile_volume_vis` と V_pile・膨張率の比較）。
 
 ### 前方の地面の高さの列（T23）
 `ground_ahead`・`ground_profile_*` は Unity の TerrainData（AGX の地形の高さ場を毎ステップ書き戻したもの）を読むので、粒子（動く土）を含まず、1ステップ（20 ms）遅れる。地形の経路と模擬 LiDAR のために、同じ8点（刃先の中点から水平の前方 25 cm ごと、25〜200 cm）で次の列を足した（notes の decisions/2026-11-17_粒子を含む高さの列とground_profileの扱い.md）。Unity の `BladeStatePublisher.cs` が求める。この列を足す前の記録にはない。
@@ -147,6 +151,7 @@ V_pile = Σ（範囲内のマス）max(h − h0, 0)·A ＋ M_dyn ÷ (ρ/s)
 - **平らな地面でも、AGX から読む列（`ground_terrain_*`・`ground_vis_*`・`ground_ptop_*`）は、TerrainData から読む列と `ground_h0` より 0.46 mm 低い**（TerrainData の高さの量子化によると考えられる。確かめていない）。`check_recording.py` は、走行中に一定な前方の高さの列を、`ground_h0` との差が 1 mm 以内なら正常とする。
 - **前方の地面の高さが走行中に一定になるのは正常**。平らな地面を削る作業では、刃先の前 1.0〜1.25 m（山の大きい 12 cm でも 1.5 m）より先は手つかずの平らな地面なので、高さは `ground_h0` のまま変わらない（pile_push では山が前にある間は変わる）。
 - 粒子は少数で大きい（基準の flat_cut・pile_push で 35〜42 個、1 個 平均 約 25 kg。Console に出た2個の半径は 0.066・0.104 m、平均の質量からは約 0.15 m）。すべて排土板の上端（刃先の後ろ 0.34 m）〜刃先の前 0.5 m にあるので、粒子で高くなるのは 25 cm と 50 cm の点だけである（25 cm の点で、走行中の 54〜70% の行で `ground_terrain_*` より 1 mm 以上高い。75 cm より先は `ground_terrain_*` と同じ）。土の山の本体（刃先の後ろ 0.34 m〜前 0.25 m）は8点の範囲の外にある。
+- 確かめの解析は `analysis/phase1/check_forward_height.py`。
 - 処理時間は、粒子を含む高さ場の読み出しと補間で平均 0.017 ms（最大 0.14 ms）、`BladeStatePublisher` の配信全体で平均 0.43〜0.62 ms（1ステップ 20 ms）。深さのずれの 95% 点（1.9〜2.2 cm）は変わらなかった。
 
 ## 3. 大きさの目安（関門7）

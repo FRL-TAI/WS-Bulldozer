@@ -51,7 +51,10 @@ OLD_ALL_NAN_COLS = {"front_soil_mass", "excavated_volume_step"}
 EXPECTED_CONST_PREFIX = ("label_",)
 EXPECTED_CONST = {"episode_index", "episode_name", "seed", "phase", "leg", "ground_h0",
                   "blade_width", "state_compaction_n", "target_depth", "depth_clipped",
-                  "front_inner_volume", "front_soil_mass_deform"}
+                  "front_inner_volume", "front_soil_mass_deform",
+                  # T24：常に 0 の力（関門3）、換算の ρ/s（エピソード中は一定）、一定の指令
+                  "F_def_x", "F_def_y", "F_def_z", "F_con_x", "F_con_y", "F_con_z",
+                  "pile_bulk_density", "cmd_vx", "cmd_wz"}
 
 # 走行中に一定でも、値が ground_h0 と一致すれば正常な列 ( 前方の地面の高さ。刃先の前 1〜1.25 m より先は手つかずの平らな地面 ) 
 GROUND_AHEAD_PREFIX = ("ground_ahead", "ground_profile_", "ground_terrain_", "ground_vis_", "ground_ptop_")
