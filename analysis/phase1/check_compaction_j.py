@@ -144,7 +144,7 @@ def part_s(E, min_cut_mm):
 # ---------------------------------------------------------------- T
 def trial_episodes():
     eps, cells = [], []
-    for rd in sorted(glob.glob(os.path.join(TRIAL, "run_*"))):
+    for rd in sorted(glob.glob(os.path.join(TRIAL, "run_*_t33_trial"))):   # T33 の試しだけ（T34 の記録は check_compaction_j34.py）
         ok = ccc.ok_files(rd)
         meta = {}
         with open(os.path.join(rd, "episodes.jsonl"), encoding="utf-8") as f:
@@ -305,7 +305,7 @@ def part_t7(TT, Fs_ter, names, boot):
     """力の経路（flat_cut、30 成分）にも K の列を足して、地形 ＋ 力の5つ同時を出す（K の点の力は試しの記録）"""
     import check_ident_combine as cic
     prefix, (b0, b1), maxdev, pattern, skip = cic.TASKS["flat_cut"]
-    FT = cic.load_task([os.path.join(ROOT, pattern), os.path.join(TRIAL, "run_*")], prefix, range(b0, b1 + 1),
+    FT = cic.load_task([os.path.join(ROOT, pattern), os.path.join(TRIAL, "run_*_t33_trial")], prefix, range(b0, b1 + 1),
                        maxdev, skip, names)
     cic.NAMES = list(names)
     Ff = cic.fisher(FT)

@@ -8,7 +8,7 @@
 エピソード名は ex_ident_pile_push_<点の名前>。
 """
 from ..episode import Command, Episode, TerrainOp
-from .ex_ident_flat_cut import BASE_SOIL, POINTS
+from .ex_ident_flat_cut import BASE_SOIL, COMPACTION_POINTS, POINTS, make_compaction_class
 
 PILE_START, PILE_LENGTH, PILE_HEIGHT, PILE_WIDTH = 3.0, 2.0, 0.3, 3.0   # m
 
@@ -52,4 +52,10 @@ def _make(key, change):
 
 for _key, _change in POINTS.items():
     _cls = _make(_key, _change)
+    globals()[_cls.__name__] = _cls
+
+# 締固めの列（T34。decisions/2026-11-18_締固めの列は折れ目の両側で別々に判定する.md）。
+# 設定の範囲は 14 m 進んだ刃先の先まで（x −5〜18 m）
+for _key, _value in COMPACTION_POINTS.items():
+    _cls = make_compaction_class(_IdentPilePush, __name__, "pile_push", _key, _value, "3 m 先の山（2 m × 0.3 m）を深さ 2 cm で押す", rect=(-5.0, 18.0, -2.5, 2.5))
     globals()[_cls.__name__] = _cls

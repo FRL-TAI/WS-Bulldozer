@@ -67,7 +67,7 @@ def boot_F(T, rng):
 
 def boot_sig(T, rng):
     """点ごとにエピソードを選び直し、J と水増し（κ を求め直す）から、そのままの F と水増しの対角を返す（T21）"""
-    need = {k for n in NAMES for k in DESIGN[n][1]}
+    need = sorted({k for n in NAMES for k in DESIGN[n][1]})   # 並べた順で回す（set の順は実行ごとに変わり、乱数の当たり方が変わる。T34）
     Sinv = T["Sinv"]
     mb, tr = {}, {}
     for k in need:

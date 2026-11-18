@@ -46,6 +46,12 @@ COMPACTION_POINTS = {
     "k_m0p06": 0.94,   # 締固め − 0.06（範囲 0.90〜1.20 の幅 0.30 の −20%）
     "k_p0p06": 1.06,   # 締固め + 0.06
 }
+# flat_cut だけの折れ目の幅を確かめる点（T34）
+COMPACTION_POINTS_FLAT_CUT = {
+    **COMPACTION_POINTS,
+    "k_m0p03": 0.97,   # 締固め − 0.03
+    "k_p0p03": 1.03,   # 締固め + 0.03
+}
 COMPACTION_DEPTH = 0.8          # 設定する深さ [m]（phase0 の帯と同じ。実験A で締固めが届いた深さ）
 COMPACTION_RECT = (-5.0, 14.0, -2.5, 2.5)   # エピソード座標（開始時の刃先の中点が原点）の x_start, x_end, y_min, y_max [m]
                                             # 開始時の履帯（刃先の約 3.9〜1.7 m 後ろ）から 10 m 進んだ刃先の先までを覆う
@@ -67,10 +73,13 @@ class _IdentFlatCut(Episode):
         return Command(speed=self.SPEED, depth=self.DEPTH)
 
 
-class _IdentFlatCutCompaction(_IdentFlatCut):
-    """締固めの列の点（初期の地面の締固めの程度を COMPACTION で設定する）"""
+class CompactionMixin:
+    """締固めの列の点：初期の地面の締固めの程度を COMPACTION にする（compaction_rect を、元の地形の加工より先にかける。
+    pile_push の山（loose_layer_rect）は、そのあとに積むので締固めを上書きされない）。
+    flat_piecewise・pile_push でも使う（T34。decisions/2026-11-18_締固めの列は折れ目の両側で別々に判定する.md）"""
     REQUIRES_GRID_CONTROL = True
     COMPACTION = 1.0
+    COMPACTION_RECT = COMPACTION_RECT
 
     def sample_params(self, rng):
         d = super().sample_params(rng)
@@ -78,22 +87,24 @@ class _IdentFlatCutCompaction(_IdentFlatCut):
         return d
 
     def terrain_ops(self):
-        x0, x1, y0, y1 = COMPACTION_RECT
-        return [TerrainOp("compaction_rect", x0, x1, y0, y1, value=self.COMPACTION, depth=COMPACTION_DEPTH)]
+        x0, x1, y0, y1 = self.COMPACTION_RECT
+        return [TerrainOp("compaction_rect", x0, x1, y0, y1, value=self.COMPACTION, depth=COMPACTION_DEPTH)] + list(super().terrain_ops())
 
 
-def _make_compaction(key, value):
-    soil = dict(BASE_SOIL)
+def make_compaction_class(base, module, task, key, value, desc, rect=COMPACTION_RECT):
+    """base（作業の共通クラス）に締固めの点を足したクラスを作る。名前は ex_ident_<task>_<key>"""
     attrs = {
-        "__module__": __name__,
-        "__doc__": f"同定可能性の flat_cut：初期の地面の締固めの程度 {value:g}",
-        "name": f"ex_ident_flat_cut_{key}",
-        "description": f"【同定可能性】初期の地面の締固めの程度を {value:g} にして、深さ 9 cm で 10 m 削る（要 AGX_GRID_CONTROL）",
-        "SOIL_RANGES": {k: (v, v) for k, v in soil.items()},
+        "__module__": module,
+        "__doc__": f"同定可能性の {task}：初期の地面の締固めの程度 {value:g}",
+        "name": f"ex_ident_{task}_{key}",
+        "description": f"【同定可能性】初期の地面の締固めの程度を {value:g} にして、{desc}（要 AGX_GRID_CONTROL）",
+        "SOIL_RANGES": {k: (v, v) for k, v in BASE_SOIL.items()},
         "POINT": key,
         "COMPACTION": float(value),
+        "COMPACTION_RECT": rect,
     }
-    return type(f"IdentFlatCut_{key}", (_IdentFlatCutCompaction,), attrs)
+    cls_name = "Ident" + "".join(w.capitalize() for w in task.split("_")) + "_" + key
+    return type(cls_name, (CompactionMixin, base), attrs)
 
 
 def _make(key, change):
@@ -115,6 +126,6 @@ for _key, _change in POINTS.items():
     _cls = _make(_key, _change)
     globals()[_cls.__name__] = _cls
 
-for _key, _value in COMPACTION_POINTS.items():
-    _cls = _make_compaction(_key, _value)
+for _key, _value in COMPACTION_POINTS_FLAT_CUT.items():
+    _cls = make_compaction_class(_IdentFlatCut, __name__, "flat_cut", _key, _value, "深さ 9 cm で 10 m 削る")
     globals()[_cls.__name__] = _cls

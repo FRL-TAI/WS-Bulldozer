@@ -94,7 +94,7 @@ def fisher_terrain(T, names, J=None):
 
 def boot_terrain(T, names, rng):
     """点ごとに選び直し、そのままの F と水増しの対角を返す（check_ident_combine.boot_sig と同じ形）"""
-    need = {k for n in names for k in DESIGN[n][1]}
+    need = sorted({k for n in names for k in DESIGN[n][1]})   # 並べた順で回す（set の順は実行ごとに変わり、乱数の当たり方が変わる。T34）
     mb, tr = {}, {}
     for k in need:
         Xk = T["X"][k][rng.integers(0, len(T["X"][k]), len(T["X"][k]))]
