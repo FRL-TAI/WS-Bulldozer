@@ -8,7 +8,7 @@
        cut_levels       B1_bands + B3_levels の時系列       → 図6(b)、§3.3 の表の切削抵抗の比
        cut_patterns     B3_patterns の時系列               → 図5
        cut_then_cut     B2_then_cut の時系列               → 図5（B2）
-       settlement       B1_bands + B3_levels の締固めの記録 → calibration（--seg 0.5 1）→ 図6(a)・図7
+       settlement       B1_bands + B3_levels の締固めの記録 → calibration（--seg 0.5 1、--target）→ 図6(a)・図7
        settlement_then_cut  B2_then_cut の締固めの記録     → 図8（区間ごとの値は図8 が segments_fig8.csv に書く）
        hardening_<条件>/{cut_bands,settlement}            → 図9〜11
   2. 図：実験A（図2〜4）は締固めの記録を check_compaction.py の関数で集計し、ほかは 1 の出力を読む。
@@ -16,6 +16,8 @@
   3. 本文の値の表 figure_values.csv（図・項目・値）と、追加の確認（図5 の基準の帯、図11 の刃先の層の w）。
 
 図の中の文字は英語。各図で使った値を標準出力にも表示する。
+較正の正解（--target）は既定で K3（c_cut_col3：履帯が踏む時点の z0〜z2 の平均。decisions/2026-11-18_較正の正解をK3に変える.md）。
+--target c_start で、削る前の値を正解にした以前の図を作れる。区間（そろわない区間を除く基準）は c_start で決め、正解の列によらない。
 
 使い方（numpy・matplotlib と bull_ope が必要なので、コンテナの中で install/setup.bash を source して実行する）：
   python3 analysis/phase0/plot_figures.py                 # 解析 → 全図 → figure_values.csv
@@ -120,7 +122,8 @@ def run_analysis():
     sh("check_cut_bands.py", records("B3_patterns") + ["--out", A("cut_patterns")], A("cut_patterns.log"))
     sh("check_cut_bands.py", records("B2_then_cut") + ["--out", A("cut_then_cut")], A("cut_then_cut.log"))
     sh("check_track_settlement.py", levels_c + ["--out", A("settlement")], A("settlement.log"))
-    sh("calibrate_settlement.py", [A("settlement", "cells.csv"), "--seg", "0.5", "1", "--out", A("calibration")],
+    sh("calibrate_settlement.py", [A("settlement", "cells.csv"), "--seg", "0.5", "1", "--target", OPTS.target,
+                                   "--out", A("calibration")],
        A("calibration.log"))
     sh("check_track_settlement.py", records("B2_then_cut", True) + ["--out", A("settlement_then_cut")],
        A("settlement_then_cut.log"))
@@ -456,7 +459,8 @@ def fig06(d, out):
     ax.scatter([fl(r["c"]) for r in cv], [fl(r["S"]) for r in cv], s=8, color="#c9c8c2", edgecolors="none",
                label="1 m segments")
     ax.errorbar(c, S, yerr=sd, color=C1, marker="o", capsize=2, label="Calibration curve (mean ± SD)")
-    ax.set(ylabel="Additional settlement [mm]", title="(a) Additional settlement under tracks after cutting")
+    ax.set(ylabel="Additional settlement [mm]", title="(a) Additional settlement under tracks after cutting"
+           + ("\n(x: K3, mean of top 3 voxels at track passage)" if OPTS.target == "c_cut_col3" else ""))
     ax.legend(fontsize=8)
     ax = axs[1]
     lv = levels_ratio(d)
@@ -464,7 +468,8 @@ def fig06(d, out):
         ax.scatter([k] * len(v), v, s=14, color=C2, alpha=0.55, edgecolors="none")
     ax.plot(list(lv), [np.mean(v) for v in lv.values()], color=C2, marker="o", label="Mean")
     ax.axhline(1, color=INK2, lw=0.8, ls="--")
-    ax.set(xlabel="Degree of compaction [-]", ylabel="Cutting resistance ratio [-]",
+    ax.set(xlabel="Degree of compaction [-]" + (" ((b): level as set)" if OPTS.target != "c_start" else ""),
+           ylabel="Cutting resistance ratio [-]",
            title="(b) Separation resistance, ratio to adjacent undisturbed ground (full width)")
     ax.legend(fontsize=8, loc="center left")
     fig.tight_layout()
@@ -490,7 +495,8 @@ def fig07(d, out):
     jit = (np.random.default_rng(0).random(len(c)) - 0.5) * 0.008
     ax.scatter(c + jit, ch, s=12, color=C1, alpha=0.6, edgecolors="none", label="1 m segments, leave-one-run-out\n(x jittered by ±0.004)")
     ax.plot([0.75, 1.25], [0.75, 1.25], color=INK2, lw=1, ls="--", label="1:1")
-    ax.set(xlim=(0.75, 1.25), ylim=(0.75, 1.25), xlabel="True degree of compaction [-]",
+    ax.set(xlim=(0.75, 1.25), ylim=(0.75, 1.25),
+           xlabel="True degree of compaction" + (" (K3) " if OPTS.target == "c_cut_col3" else " ") + "[-]",
            ylabel="Estimated degree of compaction [-]", title="Cross-validation of the calibration curve")
     ax.set_aspect("equal")
     note(ax, f"RMSE all: {rmse(allm):.3f} (n={allm.sum()})\nRMSE < 1.15: {rmse(low):.3f}\n"
@@ -498,13 +504,16 @@ def fig07(d, out):
     ax.legend(fontsize=7, loc="upper left")
     fig.tight_layout()
     save(fig, out, "fig07_cross_validation.png")
-    return {"RMSE all": f"{rmse(allm):.4f}", "RMSE <1.15": f"{rmse(low):.4f}", "RMSE 1.12–1.16": f"{rmse(sat):.4f}"}
+    out_n = sum(r["out_of_range"] == "True" for r in cv)
+    return {"target": OPTS.target, "n": f"{allm.sum()}", "RMSE all": f"{rmse(allm):.4f}", "RMSE <1.15": f"{rmse(low):.4f}",
+            "RMSE 1.12–1.16": f"{rmse(sat):.4f}", "bias all": f"{err.mean():+.4f}", "out of range": f"{out_n}",
+            "true range": f"{c.min():.3f}–{c.max():.3f}"}
 
 
 # ---------------------------------------------------------------- 図8
 def calibration_curve(seg=1.0):
-    """図6(a)・図7 と同じ較正曲線（calibrate_settlement.py の既定の設定で、settlement/cells.csv から作る）"""
-    cells = cs.load_cells(A("settlement", "cells.csv"), "c_start")
+    """図6(a)・図7 と同じ較正曲線（calibrate_settlement.py の既定の設定と --target で、settlement/cells.csv から作る）"""
+    cells = cs.load_cells(A("settlement", "cells.csv"), OPTS.target)
     segments, _ = cs.make_segments(cells, seg, 0.01, 2)
     return cs.build_curve(segments, 0.02)
 
@@ -517,7 +526,9 @@ C_COMPACTED = 1.01   # 削る前の程度がこれを超えるマスを「踏み
 def then_cut_segments(path, cells_rows, curve, seg=1.0):
     """B2 の1記録の 1 m 区間（区間の形は較正と同じ：履帯ごと、履帯の位置のマス、マス MIN_CELLS 以上）。
     較正と違い、削る前の程度のばらつき（--homog）では除かない。区間は calibrate_settlement.make_segments で作る。
-    戻り値：区間ごとの dict（x0, 履帯, マスの数, S, 逆算値, 範囲外か, 削る前の地表の程度の統計, 深さ方向の平均, 境目か）"""
+    境目・踏み固めたかの判定は削る前の程度（c_start）で行い、正解の列（--target）によらない。
+    戻り値：区間ごとの dict（x0, 履帯, マスの数, S, 逆算値, 範囲外か, 削る前の地表の程度の統計, 正解の列の平均,
+    深さ方向の平均, 境目か）"""
     name = os.path.basename(path)
     rows = cc.load(path)
     cols, _ = cc.depth_columns(rows)
@@ -527,12 +538,12 @@ def then_cut_segments(path, cells_rows, curve, seg=1.0):
     snap = {(r["lane"], r["unity_ix"], r["unity_iy"]): r for r in tb[t_cut]}
     cells, depth = [], {}
     for c in cells_rows:
-        x, cst, S = fl(c["x"]), fl(c["c_start"]), -fl(c["extra_mm"])
-        if not all(math.isfinite(v) for v in (x, cst, S)):
+        x, cst, S, tgt = fl(c["x"]), fl(c["c_start"]), -fl(c["extra_mm"]), fl(c[OPTS.target])
+        if not all(math.isfinite(v) for v in (x, cst, S, tgt)):
             continue
         r = next((v for k, v in snap.items() if k[0] == c["lane"] and abs(v["_x"] - x) < 1e-3), None)
         depth[(c["group"], x)] = cc.column_average(r, r, cols, 0.3125, Z_OFFSET, COL_DEPTH)[0] if r is not None else math.nan
-        cells.append({"file": name, "group": c["group"], "x": x, "c": cst, "S": S})
+        cells.append({"file": name, "group": c["group"], "x": x, "c": cst, "S": S, "tgt": tgt})
     segs, _ = cs.make_segments(cells, seg, math.inf, MIN_CELLS)
     members = defaultdict(list)
     for c in cells:
@@ -545,6 +556,7 @@ def then_cut_segments(path, cells_rows, curve, seg=1.0):
         est, outr = cs.invert(curve, s["S"])
         out.append({"x0": s["x0"], "track": s["group"], "n": s["n"], "S": s["S"], "est": est, "out": outr,
                     "c_mean": float(cv.mean()), "c_sd": float(cv.std()), "c_min": float(cv.min()), "c_max": float(cv.max()),
+                    "tgt": float(np.mean([c["tgt"] for c in m])),
                     "depth": float(np.nanmean([depth[(c["group"], c["x"])] for c in m])),
                     "boundary": bool((np.abs(cv - 1) <= C_FLAT).any() and (cv > C_COMPACTED).any())})
     return out
@@ -568,6 +580,8 @@ def fig08(d, out):
             ss = [s for s in segs if s["track"] == tr]
             x = [s["x0"] + 0.5 for s in ss]
             ax.plot(x, [s["c_mean"] for s in ss], color=C2, ls=LS[tr], lw=1, marker="s", ms=2.5, alpha=0.8)
+            if OPTS.target != "c_start":
+                ax.plot(x, [s["tgt"] for s in ss], color=C4, ls=LS[tr], lw=1, marker="D", ms=2.5, alpha=0.9)
             ax.plot(x, [s["depth"] for s in ss], color=C3, ls=LS[tr], lw=1, marker="^", ms=2.5, alpha=0.8)
             ax.plot(x, [s["est"] for s in ss], color=C1, ls=LS[tr], lw=1.2)
             for xi, s in zip(x, ss):
@@ -579,6 +593,7 @@ def fig08(d, out):
                           "S_mm": f"{s['S']:.2f}", "c_hat": f"{s['est']:.4f}", "out_of_range": int(s["out"]),
                           "c_surface_mean": f"{s['c_mean']:.4f}", "c_surface_sd": f"{s['c_sd']:.4f}",
                           "c_surface_min": f"{s['c_min']:.4f}", "c_surface_max": f"{s['c_max']:.4f}",
+                          f"{OPTS.target}_mean": f"{s['tgt']:.4f}",
                           f"c_depth_mean_{COL_DEPTH:.1f}m": f"{s['depth']:.4f}", "boundary": int(s["boundary"])})
     for ax, title in zip(axs, ("(a) Compacted by tracks (2 round trips), then cut", "(b) Control: cut without compaction")):
         ax.axhline(1, color=INK2, lw=0.8, ls=":")
@@ -588,6 +603,8 @@ def fig08(d, out):
          Line2D([], [], color=C1, marker="o", ms=4.5, mfc="white", ls="none", label="Out of range (clipped)"),
          Line2D([], [], color=C1, marker="X", ms=6, ls="none", label="Boundary segment"),
          Line2D([], [], color=C2, marker="s", ms=2.5, label="Surface (before cutting)"),
+         *([Line2D([], [], color=C4, marker="D", ms=2.5, label="K3: top 3 voxels at track passage (true)")]
+           if OPTS.target != "c_start" else []),
          Line2D([], [], color=C3, marker="^", ms=2.5, label=f"Mean to {COL_DEPTH:.1f} m depth (before cutting)"),
          Line2D([], [], color=INK2, ls="-", label="Left track"),
          Line2D([], [], color=INK2, ls="--", label="Right track")]
@@ -616,6 +633,19 @@ def fig08(d, out):
     res["B2 compacted run, boundary"] = summary([r for r in comp if int(r["boundary"])])
     res["B2 compacted run, not compacted"] = summary([r for r in comp if not is_c(r) and not int(r["boundary"])], True)
     res["B2 control run"] = summary(ctrl, True)
+
+    def err(rs):  # 正解の列に対する逆算値の誤差（範囲内の区間だけ）
+        rs = [r for r in rs if not int(r["out_of_range"])]
+        e = np.array([fl(r["c_hat"]) - fl(r[f"{OPTS.target}_mean"]) for r in rs])
+        tg = [fl(r[f"{OPTS.target}_mean"]) for r in rs]
+        return (f"n {len(e)}, bias {e.mean():+.3f}, RMSE {math.sqrt(np.mean(e ** 2)):.3f}, "
+                f"{OPTS.target} {min(tg):.3f}–{max(tg):.3f}") if len(e) else "n 0"
+    res[f"B2 err vs {OPTS.target}, compacted (excl. boundary)"] = err([r for r in comp if is_c(r) and not int(r["boundary"])])
+    res[f"B2 err vs {OPTS.target}, compacted x=4–6 m"] = err([r for r in comp if is_c(r) and not int(r["boundary"])
+                                                            and 4 <= fl(r["x0_m"]) <= 6])
+    res[f"B2 err vs {OPTS.target}, boundary"] = err([r for r in comp if int(r["boundary"])])
+    res[f"B2 err vs {OPTS.target}, not compacted"] = err([r for r in comp if not is_c(r) and not int(r["boundary"])])
+    res[f"B2 err vs {OPTS.target}, control"] = err(ctrl)
     return res
 
 
@@ -817,6 +847,8 @@ def main():
     ap.add_argument("--only", type=int, nargs="+", help="描く図の番号（例 --only 6 7）。figure_values.csv は書かない")
     ap.add_argument("--skip-analysis", action="store_true", help="解析を実行せず、前回の data/phase0/analysis/ を使う")
     ap.add_argument("--dpi", type=int, default=150)
+    ap.add_argument("--target", default="c_cut_col3", choices=["c_cut_col3", "c_start"],
+                    help="較正の正解の列（既定 c_cut_col3 = K3。c_start は削る前の値）")
     OPTS = ap.parse_args()
     OPTS.out = OPTS.out or os.path.join(OPTS.data, "figures")
     MANIFEST = read_manifest(OPTS.data)

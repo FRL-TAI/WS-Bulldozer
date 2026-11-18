@@ -5,7 +5,8 @@
 
 手順：
   1. 区間にまとめる：記録・履帯（track_L / track_R）ごとに、前後 --seg [m] の区間でマスを平均する。
-     区間の中で開始時の締固めの程度がそろっていない区間（帯の境目をまたぐ区間）は除く
+     区間の中で開始時の締固めの程度（--homog-col、既定 c_start）がそろっていない区間（帯の境目をまたぐ区間）は除く。
+     区間の正解は --target の列のマスの平均
   2. 較正曲線を作る：締固めの程度（--level-step ごとにまとめる）ごとに追加の沈下 S の平均を求め、
      「締固めの程度が大きいほど S が小さい」ように単調化する（重み付きの単調回帰）
   3. 逆算：S から、較正曲線を log S と c の折れ線とみなして補間し、締固めの程度 ĉ を求める。
@@ -20,7 +21,9 @@
           --seg 0.5 1 2 --out data/compaction/calibration --plot
 
 オプション：
-  --target       逆算する締固めの程度の列（既定 c_start：削る前の値。c_cut_col3：削った後の z0〜z2 の平均）
+  --target       逆算する締固めの程度の列（較正の正解）。既定 c_cut_col3（K3：履帯が踏む時点の z0〜z2 の平均。
+                 decisions/2026-11-18_較正の正解をK3に変える.md）。c_start（削る前の値）も選べる
+  --homog-col    区間の中の程度のそろい（--homog）を判定する列（既定 c_start。正解の列を変えても区間は変えない）
   --seg          区間の長さ [m]（複数指定すると、区間の長さごとの精度を比べる。既定 1.0）
   --level-step   較正曲線で締固めの程度をまとめる幅（既定 0.02）
   --homog        区間の中の締固めの程度のばらつき（標準偏差）の上限（既定 0.01）
@@ -45,16 +48,18 @@ def to_float(s):
 
 
 # ---------------------------------------------------------------- 読み込みと区間
-def load_cells(path, target):
+def load_cells(path, target, homog_col="c_start"):
+    """マスごとの値。c は正解（target）、c_h は区間のそろいを判定する値（homog_col）"""
     with open(path, encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
     cells = []
     for r in rows:
-        c, e, x = to_float(r.get(target)), to_float(r.get("extra_mm")), to_float(r.get("x"))
-        if all(math.isfinite(v) for v in (c, e, x)):
-            cells.append({"file": r["file"], "group": r["group"], "x": x, "c": c, "S": -e})
+        c, ch = to_float(r.get(target)), to_float(r.get(homog_col))
+        e, x = to_float(r.get("extra_mm")), to_float(r.get("x"))
+        if all(math.isfinite(v) for v in (c, ch, e, x)):
+            cells.append({"file": r["file"], "group": r["group"], "x": x, "c": c, "c_h": ch, "S": -e})
     if not cells:
-        raise SystemExit(f"{path} に列 {target}・extra_mm・x がありません")
+        raise SystemExit(f"{path} に列 {target}・{homog_col}・extra_mm・x がありません")
     return cells
 
 
@@ -65,7 +70,8 @@ def make_segments(cells, seg, homog, min_cells):
     out, dropped = [], 0
     for (f, g, k), cs in groups.items():
         cv = np.array([c["c"] for c in cs])
-        if len(cs) < min_cells or cv.std() > homog:
+        ch = np.array([c.get("c_h", c["c"]) for c in cs])
+        if len(cs) < min_cells or ch.std() > homog:
             dropped += 1
             continue
         out.append({"file": f, "group": g, "x0": k * seg, "n": len(cs),
@@ -164,7 +170,8 @@ def summarize(res, saturated):
 def main():
     ap = argparse.ArgumentParser(description="追加の沈下から締固めの程度を逆算する較正曲線と交差検証")
     ap.add_argument("cells")
-    ap.add_argument("--target", default="c_start")
+    ap.add_argument("--target", default="c_cut_col3")
+    ap.add_argument("--homog-col", default="c_start")
     ap.add_argument("--seg", type=float, nargs="+", default=[1.0])
     ap.add_argument("--level-step", type=float, default=0.02)
     ap.add_argument("--homog", type=float, default=0.01)
@@ -174,9 +181,9 @@ def main():
     ap.add_argument("--plot", action="store_true")
     a = ap.parse_args()
 
-    cells = load_cells(a.cells, a.target)
+    cells = load_cells(a.cells, a.target, a.homog_col)
     files = sorted({c["file"] for c in cells})
-    print(f"マス {len(cells)}、記録 {len(files)}、逆算する値: {a.target}")
+    print(f"マス {len(cells)}、記録 {len(files)}、逆算する値: {a.target}、区間のそろいの判定: {a.homog_col}")
 
     all_seg_rows, all_cv_rows, curves = [], [], {}
     for seg in a.seg:
