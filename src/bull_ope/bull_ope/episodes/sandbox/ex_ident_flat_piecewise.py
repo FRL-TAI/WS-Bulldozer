@@ -12,6 +12,7 @@ from .ex_ident_flat_cut import BASE_SOIL, POINTS
 
 class _IdentFlatPiecewise(Episode):
     """共通部分（name がないので一覧には出ない）"""
+    RECORD_COMPACTION = True  # T31：締固めの記録（*_compaction.csv）を取る（decisions/2026-11-18_同定用のエピソードで締固めの記録を取る.md）
     DEPTHS = (0.12, 0.06, 0.09)   # 区間ごとの切削深さ [m]
     SPEED = 0.5                   # 前進速度 [m/s]
     MAX_DISTANCE = 14.0           # 走行距離 [m]
@@ -45,3 +46,19 @@ def _make(key, change):
 for _key, _change in POINTS.items():
     _cls = _make(_key, _change)
     globals()[_cls.__name__] = _cls
+
+
+# ---- T31：膨張率の範囲の両端（ex_swell_flat_cut_s110・s140、ex_swell_pile_push_s110・s140 と同じ形）。
+# 締固めの記録で、履帯が踏む時点の K3 の s による動きを確かめる（decisions/2026-11-18_同定用のエピソードで締固めの記録を取る.md）
+class SwellFlatPiecewise110(_IdentFlatPiecewise):
+    name = "ex_swell_flat_piecewise_s110"
+    description = "【T31】膨張率 1.10（ほかは dirt_1）で、14 m を深さ 12→6→9 cm で削る"
+    SOIL_RANGES = {k: (v, v) for k, v in {**BASE_SOIL, "swell_factor": 1.10}.items()}
+    POINT = "swell_110"
+
+
+class SwellFlatPiecewise140(_IdentFlatPiecewise):
+    name = "ex_swell_flat_piecewise_s140"
+    description = "【T31】膨張率 1.40（ほかは dirt_1）で、14 m を深さ 12→6→9 cm で削る"
+    SOIL_RANGES = {k: (v, v) for k, v in {**BASE_SOIL, "swell_factor": 1.40}.items()}
+    POINT = "swell_140"

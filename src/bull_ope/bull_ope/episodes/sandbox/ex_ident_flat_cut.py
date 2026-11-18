@@ -42,6 +42,7 @@ POINTS = {
 
 class _IdentFlatCut(Episode):
     """共通部分（name がないので一覧には出ない）"""
+    RECORD_COMPACTION = True  # T31：締固めの記録（*_compaction.csv）を取る（decisions/2026-11-18_同定用のエピソードで締固めの記録を取る.md）
     DEPTH = 0.09          # 切削深さ [m]
     SPEED = 0.5           # 前進速度 [m/s]
     MAX_DISTANCE = 10.0   # 走行距離 [m]

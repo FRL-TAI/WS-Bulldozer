@@ -8,6 +8,15 @@
 各 CSV について次を確認し、OK / WARN ( 要確認 ) / NG ( 不合格 ) で表示する。
   1. 記録の周期        2. 時刻の単調性・重複   3. 欠損 ( NaN ) 
   4. 一定の列          5. ラベル              6. 進行状況の順番     7. 走行時間
+  8. 折り返し（往復するエピソード ex_compaction_passes*・ex_compaction_then_cut* だけ）
+
+折り返しでは、次のどれかに当たる記録を NG にする
+( notes の decisions/2026-11-18_折り返しは進みの判定の別名版と失敗の検出で直す.md ) 。
+  - 安全停止（またはエラー）で終わった：進行状況に raising がない
+  - 後退の回数（cmd_vx < 0 が続く区間の数）が ROUND_TRIPS（そのエピソードとシードの param）と違う
+  - 後退の区間の、折り返しの判定に使う量の最小値が判定の値（0.2 m）を超えた（開始位置に戻ったと判定されなかった）
+    判定に使う量は、直線距離の版（ex_compaction_passes・ex_compaction_then_cut）では記録の distance、
+    進みの版（_v2・T12 の _md*）では刃先の開始時の向きへの進み p（edge_x・edge_y から bull_ope と同じ方法で求める）
 
 欠損では、削っていない行 ( state_cut_compaction_n が 0 ) の state_cut_compaction_mean/min/max の NaN は
 想定どおりとする。あとから足した列 ( NEW_COLS ) がない記録、front_soil_mass・excavated_volume_step が
@@ -21,7 +30,9 @@
 エラーで途中終了したエピソードの CSV も点検できる ( 途中で切れていないか、NaN がないかの確認 ) 
 """
 import argparse
+import math
 import os
+import re
 
 import numpy as np
 import pandas as pd
@@ -69,6 +80,72 @@ EXPECTED_RUN_TIME = {
 }
 
 PHASE_ORDER = ["lowering", "running", "raising"]
+
+# 8. 折り返し
+TURN_PREFIX = ("ex_compaction_passes", "ex_compaction_then_cut")
+TURN_RETURN = 0.2      # 開始位置に戻ったとみなす値 [m]（エピソードの判定と同じ）
+TURN_TOL = 0.02        # 記録の周期（50 Hz）と制御の周期のずれの許容 [m]
+TURN_DIR = 0.5         # 進みの版で、開始時の向きを決める刃先の移動距離 [m]（bull_ope.episodes.turnaround と同じ）
+
+
+def expected_round_trips(name, seed):
+    """エピソードのクラスから ROUND_TRIPS（シードで変わるものは param の round_trips）を求める。分からなければ None"""
+    try:
+        from bull_ope.episodes import available_episodes
+        cls = available_episodes().get(name)
+        if cls is None:
+            return None
+        ep = cls(int(seed))
+        return int(ep.params.get("round_trips", getattr(cls, "ROUND_TRIPS", None)))
+    except Exception:
+        return None
+
+
+def progress_series(df):
+    """刃先の開始時の向きへの進み p（bull_ope.episodes.turnaround.ProgressTracker と同じ）"""
+    ex, ey = df["edge_x"].to_numpy(), df["edge_y"].to_numpy()
+    dx, dy = ex - ex[0], ey - ey[0]
+    r = np.hypot(dx, dy)
+    k = np.argmax(r >= TURN_DIR) if (r >= TURN_DIR).any() else None
+    if k is None:
+        return r
+    u = (dx[k] / r[k], dy[k] / r[k])
+    p = dx * u[0] + dy * u[1]
+    p[:k] = r[:k]
+    return p
+
+
+def check_turnaround(df, name):
+    """往復するエピソードの折り返しの失敗を検出する。戻り値 (判定, 詳細)"""
+    problems = []
+    if "raising" not in set(df["phase"]):
+        problems.append("安全停止またはエラーで終わった（raising がない）")
+    run = df[df["phase"] == "running"].reset_index(drop=True)
+    by_progress = bool(re.search(r"_v2|_md\d+", name))
+    metric = progress_series(run) if by_progress else run["distance"].to_numpy()
+    back = (run["cmd_vx"] < 0).to_numpy()
+    legs, i = [], 0
+    while i < len(run):
+        if back[i]:
+            j = i
+            while j < len(run) and back[j]:
+                j += 1
+            legs.append((i, j))
+            i = j
+        else:
+            i += 1
+    mins = [float(np.nanmin(metric[a:b])) for a, b in legs]
+    want = expected_round_trips(name, df["seed"].iloc[0]) if "seed" in df else None
+    if want is not None and len(legs) != want:
+        problems.append(f"後退の回数 {len(legs)} が ROUND_TRIPS {want} と違う")
+    over = [m for m in mins if m > TURN_RETURN + TURN_TOL]
+    if over:
+        problems.append(f"後退の区間の最小値が {TURN_RETURN} m を超えた（{', '.join(f'{m:.3f}' for m in over)} m）")
+    detail = (f"判定 {'進み p' if by_progress else '直線距離'}、後退 {len(legs)} 回（ROUND_TRIPS {want if want is not None else '不明'}）、"
+              f"後退ごとの最小値 " + ("・".join(f"{m:.3f}" for m in mins) if mins else "—") + " m")
+    if problems:
+        return "NG", "；".join(problems) + "。" + detail
+    return ("OK" if want is not None else "WARN"), detail
 
 
 def check_file(path, soil):
@@ -187,6 +264,10 @@ def check_file(path, soil):
         ok = 0.7 * exp <= run_time <= 1.5 * exp
         res.append(("走行時間", "OK" if ok else "WARN",
                     f"{run_time:.1f} s ( {len(run)} 行、目安 {exp:.0f} s ) "))
+
+    # 8. 折り返し
+    if name.startswith(TURN_PREFIX) and "phase" in df and "cmd_vx" in df:
+        res.append(("折り返し", *check_turnaround(df, name)))
 
     return name, df, res
 

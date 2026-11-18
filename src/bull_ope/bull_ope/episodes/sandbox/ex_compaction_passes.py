@@ -8,6 +8,7 @@ Unity 側の CompactionProbe（名前が "ex_compaction" で始まるエピソ�
 走路と対照の列の地表の高さと締固めの程度を一定間隔で CSV に書き出す。
 """
 from ..episode import Command, Episode
+from ..turnaround import PassesByProgressMixin
 
 # 使用する土質（OperaSim の TerrainMaterial（dirt_1）の設定値。ex_shuttle と同じ）
 SOIL = {"cohesion": 2100.0, "friction_angle_deg": 39.98, "density": 1474.0}
@@ -44,3 +45,15 @@ class CompactionPasses(Episode):
 
     def is_done(self, obs):
         return self.count >= self.ROUND_TRIPS or obs.t >= self.TIMEOUT
+
+# ---- T31：折り返しを「開始時の向きへの進み」で判定する別名版（decisions/2026-11-18_折り返しは進みの判定の別名版と失敗の検出で直す.md）
+# 上のクラスの動きは変えない（phase0 の再現性のため）。失敗しない場合の動きは同じ
+class CompactionPassesV2(PassesByProgressMixin, CompactionPasses):
+    name = "ex_compaction_passes_v2"
+    description = "【締固め】ex_compaction_passes と同じ往復。折り返しを刃先の開始時の向きへの進みで判定する"
+
+
+class CompactionPassesV2Rho1900(CompactionPassesV2):
+    name = "ex_compaction_passes_v2_rho1900"
+    description = "【締固め】ex_compaction_passes_v2 を ρ 1,900 で（maxDensity は Unity の案D で 1.357·ρ）"
+    SOIL_RANGES = {**CompactionPasses.SOIL_RANGES, "density": (1900.0, 1900.0)}

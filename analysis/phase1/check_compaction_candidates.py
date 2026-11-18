@@ -28,6 +28,13 @@ notes の decisions/2026-11-17_締固めの列の定義.md（「履帯が踏む�
      phase0 の B2（図8）：区間ごとの逆算値（c_start の較正曲線）と、区間の平均の K1〜K4・c_start との差
   D. 往復するエピソードの折り返し（obs.distance ≤ 0.2 m）の余裕：後退の区間ごとの、開始位置からの最小の直線距離と、
      開始時の向きに直交する横のずれ
+  E.（T31）締固めの記録つきで取り直した同定用のエピソード（data/phase1/compaction_track/）の、履帯が踏む時点の K3
+     （主）と K1・K4（参考）：作業 × 点ごとの分布、0.90 を下回るマスの割合、基準との差、s による動き、
+     刃先の前の代わりの量（state_cut_compaction_mean）との対応、深さのずれの 95% 点（締固めの記録を取らない回との比較）。
+     v2 の折り返しの確かめ（data/phase1/compaction_track/turnaround_v2/）：後退ごとの横のずれと向きの変化。
+
+使い方（T31 の E だけ）：
+  python3 analysis/phase1/check_compaction_candidates.py --parts E --report data/phase1/compaction_track/report.md
 """
 import argparse
 import glob
@@ -44,6 +51,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "phase0"))
 import calibrate_settlement as cs   # noqa: E402
 import check_track_settlement as cts   # noqa: E402
+sys.path.insert(0, os.path.join(HERE, "..", "validation"))
+from check_physics import settled_cut_rows   # noqa: E402
 
 ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 D1 = os.path.join(ROOT, "data", "phase1")
@@ -458,21 +467,285 @@ def part_d():
     p("")
 
 
+# ============================================================ E. T31：締固めの記録つきの取り直し
+DT = os.path.join(D1, "compaction_track")
+K_LOW = 0.90            # 締固めの範囲の下限（暫定。decisions/2026-11-18_締固めの範囲の下限は暫定0.90とし取り直しで確かめる.md）
+MAX_DEV = 0.10          # pile_push の潜り（深さのずれの 95% 点）[m]
+BLADE_OFFSET = 2.8      # 機体の基準点から刃先までの前後の距離 [m]（check_track_settlement の既定）
+CUT_AHEAD = 0.25        # state_cut_compaction_* の範囲（刃先の前 0〜0.5 m）の中ほど [m]
+POINT_S = {"base": 1.28, "s_m0p06": 1.22, "s_p0p06": 1.34, "s110": 1.10, "s140": 1.40}
+POINT_ORDER = ["base", "s_m0p06", "s_p0p06", "s110", "s140", "phi_m10", "phi_p10", "c_m1p5", "c_p1p5",
+               "rho_m70", "rho_p70"]
+
+
+def dev95(df):
+    rows = settled_cut_rows(df)
+    return float(np.percentile(np.abs(rows["depth"] - rows["target_depth"]), 95)) if rows is not None else math.nan
+
+
+def proxy_bins(df):
+    """刃先の前の代わりの量 state_cut_compaction_mean を、範囲の中ほどの位置（記録の座標 x、1 m ごと）でまとめる"""
+    r = df[(df.phase == "running") & (df.state_cut_compaction_n > 0)]
+    x = r.distance + BLADE_OFFSET + CUT_AHEAD
+    return r.assign(k=np.floor(x)).groupby("k").state_cut_compaction_mean.mean()
+
+
+def ok_files(run_dir):
+    """episodes.jsonl で status が ok で、締固めの記録が届いた（compaction_rows > 0）エピソードの CSV の名前
+    （途中で止めた・失敗した回と、Unity から締固めの記録が届かなかった回を除く）"""
+    import json
+    out = set()
+    with open(os.path.join(run_dir, "episodes.jsonl"), encoding="utf-8") as f:
+        for line in f:
+            r = json.loads(line)
+            if r.get("status") == "ok" and r.get("file") and r.get("compaction_rows", 0) > 0:
+                out.add(r["file"])
+    return out
+
+
+def track_episodes():
+    eps, cells = [], []
+    ok = {}
+    for f in sorted(glob.glob(os.path.join(DT, "*", "run_*", "ep*.csv"))):
+        if f.endswith("_compaction.csv"):
+            continue
+        rd = os.path.dirname(f)
+        if rd not in ok:
+            ok[rd] = ok_files(rd)
+        if os.path.basename(f) not in ok[rd]:
+            continue
+        m = NAME.search(os.path.basename(f))
+        cp = f[:-4] + "_compaction.csv"
+        if not m or not os.path.exists(cp):
+            continue
+        df = pd.read_csv(f)
+        e = {"file": os.path.relpath(f, DT), "task": m.group(1), "point": m.group(2), "dev95": dev95(df),
+             "s": float(df.label_swell.iloc[0]), "proxy": proxy_bins(df),
+             "proxy_mean": df.loc[(df.phase == "running") & (df.state_cut_compaction_n > 0), "state_cut_compaction_mean"].mean()}
+        tc = track_cells(cp)
+        for c in tc:
+            c.update(task=e["task"], point=e["point"], ep=e["file"], s=e["s"])
+        e["n_cells"] = len(tc)
+        e["x_max"] = max((c["x"] for c in tc), default=math.nan)
+        e["K3_med"] = float(np.median([c["K3"] for c in tc])) if tc else math.nan
+        e["K3_mean"] = float(np.mean([c["K3"] for c in tc])) if tc else math.nan
+        eps.append(e)
+        cells += tc
+    return pd.DataFrame(eps), pd.DataFrame(cells)
+
+
+def old_dev95():
+    """締固めの記録を取らない回（力の経路の記録）の深さのずれの 95% 点（作業 × 点）"""
+    out = defaultdict(list)
+    for task in TASKS:
+        for f in sorted(glob.glob(os.path.join(D1, task, "run_*", "ep*.csv"))):
+            m = NAME.search(os.path.basename(f))
+            if m and not f.endswith("_compaction.csv") and m.group(2) in POINT_ORDER:
+                out[(task, m.group(2))].append(dev95(pd.read_csv(f)))
+    return out
+
+
+def part_e(skip_old=False):
+    ep, ce = track_episodes()
+    p("## E. 締固めの記録つきで取り直した同定用のエピソード（T31）")
+    p("")
+    if ep.empty:
+        p("記録がない")
+        return ce
+    drop = ep[(ep.task == "pile_push") & (ep.dev95 > MAX_DEV)]
+    p(f"記録 {len(ep)} 本（作業ごと：" + "、".join(f"{t} {int((ep.task == t).sum())}" for t in TASKS) + "）。"
+      f"pile_push の潜り（深さのずれの 95% 点 > {MAX_DEV:.2f} m）で除いた記録 {len(drop)} 本"
+      + ("：" + "、".join(f"{r.file}（{r.dev95 * 100:.1f} cm）" for r in drop.itertuples()) if len(drop) else "") + "。")
+    p("")
+    ep = ep.drop(drop.index)
+    ce = ce[~ce.ep.isin(drop.file)]
+    order = lambda pts: sorted(pts, key=lambda s: POINT_ORDER.index(s) if s in POINT_ORDER else 99)
+
+    p("### E1. 記録の範囲と本数")
+    p("")
+    p("| 作業 | 点 | 本数 | マスの数（1本あたり） | 履帯が通り切ったマスの x の最大 [m] | 深さのずれの 95% 点 [cm]（中央値・最大） |")
+    p("|---|---|---|---|---|---|")
+    for t in TASKS:
+        for pt in order(ep[ep.task == t].point.unique()):
+            x = ep[(ep.task == t) & (ep.point == pt)]
+            p(f"| {t} | {pt} | {len(x)} | {x.n_cells.mean():.0f} | {x.x_max.max():.2f} | "
+              f"{x.dev95.median() * 100:.2f}・{x.dev95.max() * 100:.2f} |")
+    p("")
+    if not skip_old:
+        old = old_dev95()
+        p("深さのずれの 95% 点の比較（締固めの記録を取らない力の経路の記録。同じ作業・点。中央値・最大 [cm]、本数）：")
+        p("")
+        p("| 作業 | 点 | 記録あり（T31） | 記録なし（力の経路） |")
+        p("|---|---|---|---|")
+        for t in TASKS:
+            for pt in order(ep[ep.task == t].point.unique()):
+                x = ep[(ep.task == t) & (ep.point == pt)].dev95
+                o = np.array(old.get((t, pt), []))
+                p(f"| {t} | {pt} | {x.median() * 100:.2f}・{x.max() * 100:.2f}（{len(x)}） | "
+                  + (f"{np.median(o) * 100:.2f}・{o.max() * 100:.2f}（{len(o)}）" if len(o) else "—") + " |")
+        p("")
+
+    for k, label in (("K3", "K3（表層 3 層の平均。主）"), ("K1", "K1（地表のボクセル。参考）"), ("K4", "K4（重み付け。参考）")):
+        p(f"### E2. 履帯が踏む時点の {label}：作業 × 点の分布")
+        p("")
+        p(f"| 作業 | 点 | s | マス | 最小 | 5% | 中央値 | 95% | 最大 | {K_LOW:.2f} 未満の割合 |")
+        p("|---|---|---|---|---|---|---|---|---|---|")
+        for t in TASKS:
+            for pt in order(ce[ce.task == t].point.unique()):
+                v = ce[(ce.task == t) & (ce.point == pt)][k].to_numpy()
+                p(f"| {t} | {pt} | {ce[(ce.task == t) & (ce.point == pt)].s.iloc[0]:.2f} | {len(v)} | " + " | ".join(qrow(v))
+                  + f" | {np.mean(v < K_LOW) * 100:.2f}% |")
+            v = ce[ce.task == t][k].to_numpy()
+            p(f"| **{t} 全点** | | | {len(v)} | " + " | ".join(qrow(v)) + f" | {np.mean(v < K_LOW) * 100:.2f}% |")
+        v = ce[k].to_numpy()
+        p(f"| **3作業・全点** | | | {len(v)} | " + " | ".join(qrow(v)) + f" | {np.mean(v < K_LOW) * 100:.2f}% |")
+        p("")
+    kmin = ce.K3.min()
+    r = ce.loc[ce.K3.idxmin()]
+    p(f"**全点の K3 の最小値は {kmin:.4f}（{r.task}・{r.point}・{r.ep}、{r.group}、x = {r.x:.2f} m）で、"
+      f"{K_LOW:.2f} {'以上' if kmin >= K_LOW else '未満'}である。**")
+    p("")
+
+    p("### E3. 基準との差（エピソードごとの K3 の中央値の平均の差 ± 標準誤差。判定はしない）")
+    p("")
+    p("| 作業 | 点 | 本数 | K3 の中央値（エピソードの平均） | 基準との差 |")
+    p("|---|---|---|---|---|")
+    for t in TASKS:
+        e_t = ep[ep.task == t]
+        b = e_t[e_t.point == "base"].K3_med
+        for pt in order(e_t.point.unique()):
+            x = e_t[e_t.point == pt].K3_med
+            if pt == "base":
+                p(f"| {t} | {pt} | {len(x)} | {x.mean():.4f} | — |")
+            else:
+                se = math.sqrt(x.var(ddof=1) / len(x) + b.var(ddof=1) / len(b))
+                p(f"| {t} | {pt} | {len(x)} | {x.mean():.4f} | {x.mean() - b.mean():+.4f} ± {se:.4f} |")
+    p("")
+
+    p("### E4. s による動き（基準と s の4点。エピソードごとの K3 の中央値と最小値）")
+    p("")
+    p("| 作業 | s 1.10 | 1.22 | 1.28（基準） | 1.34 | 1.40 | 傾き d(中央値)/ds ± 標準誤差 | 最小値（s ごと） |")
+    p("|---|---|---|---|---|---|---|---|")
+    for t in TASKS:
+        e_t = ep[(ep.task == t) & ep.point.isin(POINT_S)]
+        c_t = ce[(ce.task == t) & ce.point.isin(POINT_S)]
+        cols, mins = [], []
+        for sv in (1.10, 1.22, 1.28, 1.34, 1.40):
+            x = e_t[np.isclose(e_t.s, sv)].K3_med
+            cols.append(f"{x.mean():.4f}" if len(x) else "—")
+            mv = c_t[np.isclose(c_t.s, sv)].K3
+            mins.append(f"{mv.min():.3f}" if len(mv) else "—")
+        if len(e_t) > 2:
+            A_ = np.vstack([e_t.s, np.ones(len(e_t))]).T
+            coef, res, *_ = np.linalg.lstsq(A_, e_t.K3_med, rcond=None)
+            dof = len(e_t) - 2
+            s2 = float(((e_t.K3_med - A_ @ coef) ** 2).sum()) / dof
+            se = math.sqrt(s2 * np.linalg.inv(A_.T @ A_)[0, 0])
+            slope = f"{coef[0]:+.4f} ± {se:.4f}"
+        else:
+            slope = "—"
+        p(f"| {t} | " + " | ".join(cols) + f" | {slope} | " + "・".join(mins) + " |")
+    p("")
+
+    p("### E5. 刃先の前の代わりの量（state_cut_compaction_mean）との対応")
+    p("")
+    p("1 m ごと（記録の座標 x。代わりの量は、刃先の前 0〜0.5 m の範囲の中ほど distance + 2.8 + 0.25 m で置いた）に、"
+      "K3 の平均（履帯 2 本のマス）と代わりの量の平均を比べた。エピソード単位は、マスの K3 の平均と、running で削っている行の代わりの量の平均。")
+    p("")
+    p("| 作業 | 1 m の区切りの数 | K3 − 代わりの量（平均・標準偏差） | 相関（1 m） | 相関（エピソード） |")
+    p("|---|---|---|---|---|")
+    for t in TASKS:
+        e_t = ep[ep.task == t]
+        pairs = []
+        for e in e_t.itertuples():
+            cc = ce[ce.ep == e.file]
+            kb = cc.assign(k=np.floor(cc.x)).groupby("k").K3.mean()
+            j = kb.index.intersection(e.proxy.index)
+            pairs += list(zip(kb[j], e.proxy[j]))
+        a_ = np.array(pairs)
+        if len(a_) > 2:
+            d = a_[:, 0] - a_[:, 1]
+            r1 = np.corrcoef(a_[:, 0], a_[:, 1])[0, 1]
+            r2 = np.corrcoef(e_t.K3_mean, e_t.proxy_mean)[0, 1] if len(e_t) > 2 else math.nan
+            p(f"| {t} | {len(a_)} | {d.mean():+.4f}・{d.std():.4f} | {r1:+.2f} | {fmt(r2, 2)} |")
+    p("")
+    return ce
+
+
+def part_turnaround_v2():
+    recs = sorted(f for f in glob.glob(os.path.join(DT, "turnaround_v2", "*_v2*.csv")) if not f.endswith("_compaction.csv"))
+    p("### E6. 折り返しの別名版（v2）の確かめ")
+    p("")
+    p("後退の区間ごとに、判定に使う進み p の最小値と、そのときの開始時の向きに直交する横のずれ・向きの変化（D と同じ求め方）。")
+    p("")
+    p("| 記録 | ρ | 後退の回数 | ROUND_TRIPS | p の最小値 [m]（後退ごと） | 横のずれ [m]（後退ごと） | 向きの変化 [deg]（後退ごと） | raising |")
+    p("|---|---|---|---|---|---|---|---|")
+    sys.path.insert(0, os.path.join(HERE, "..", "validation"))
+    import check_recording as cr
+    for f in recs:
+        d = pd.read_csv(f)
+        run = d[d.phase == "running"].reset_index(drop=True)
+        pr = cr.progress_series(run)
+        x0, y0, yaw0 = run.x.iloc[0], run.y.iloc[0], run.yaw.iloc[0]
+        ux, uy = math.cos(yaw0), math.sin(yaw0)
+        back = (run.cmd_vx < 0).to_numpy()
+        legs, i = [], 0
+        while i < len(run):
+            if back[i]:
+                j = i
+                while j < len(run) and back[j]:
+                    j += 1
+                legs.append((i, j))
+                i = j
+            else:
+                i += 1
+        pm, lat, dyaw = [], [], []
+        for a_, b_ in legs:
+            k = a_ + int(np.argmin(pr[a_:b_]))
+            r = run.iloc[k]
+            pm.append(pr[k])
+            lat.append(-(r.x - x0) * uy + (r.y - y0) * ux)
+            dyaw.append(math.degrees((r.yaw - yaw0 + math.pi) % (2 * math.pi) - math.pi))
+        name = str(d.episode_name.iloc[0])
+        want = cr.expected_round_trips(name, d.seed.iloc[0])
+        p(f"| {os.path.basename(f)} | {d.label_rho0.iloc[0]:.0f} | {len(legs)} | {want} | " + "・".join(f"{v:.3f}" for v in pm)
+          + " | " + "・".join(f"{v:+.3f}" for v in lat) + " | " + "・".join(f"{v:+.2f}" for v in dyaw)
+          + f" | {'あり' if 'raising' in set(d.phase) else 'なし'} |")
+    p("")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[1])
     ap.add_argument("--report")
+    ap.add_argument("--parts", default="ABCD", help="出す部分（例 ABCD、E）")
+    ap.add_argument("--skip-old", action="store_true", help="E で、締固めの記録を取らない回の深さのずれを読まない")
     a = ap.parse_args()
-    p("# 締固めの列の候補と範囲の下限の材料（T29）")
+    if "E" in a.parts and set(a.parts) == {"E"}:
+        p("# 締固めの記録つきの取り直し（T31）")
+    else:
+        p("# 締固めの列の候補と範囲の下限の材料（T29）")
     p("")
-    part_a()
-    df = part_b()
-    part_c(df)
-    part_d()
+    df = None
+    if "A" in a.parts:
+        part_a()
+    if set("BCD") & set(a.parts):
+        df = part_b()
+        if "C" in a.parts:
+            part_c(df)
+        if "D" in a.parts:
+            part_d()
+    if "E" in a.parts:
+        ce = part_e(a.skip_old)
+        part_turnaround_v2()
+        if a.report and ce is not None and len(ce):
+            os.makedirs(os.path.dirname(a.report), exist_ok=True)
+            ce.to_csv(os.path.join(os.path.dirname(a.report), "track_cells_t31.csv"), index=False)
     if a.report:
         os.makedirs(os.path.dirname(a.report), exist_ok=True)
         with open(a.report, "w", encoding="utf-8") as f:
             f.write("\n".join(OUT) + "\n")
-        df.to_csv(os.path.join(os.path.dirname(a.report), "track_cells.csv"), index=False)
+        if df is not None:
+            df.to_csv(os.path.join(os.path.dirname(a.report), "track_cells.csv"), index=False)
         print(f"保存: {a.report}")
 
 

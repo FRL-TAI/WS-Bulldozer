@@ -22,7 +22,8 @@ from typing import Optional
 from .ex_compaction_passes import CompactionPasses
 from .ex_ident_flat_cut import BASE_SOIL, _IdentFlatCut
 from .ex_ident_pile_push import _IdentPilePush
-from ..episode import Command, SoilParams
+from ..episode import SoilParams
+from ..turnaround import PassesByProgressMixin
 
 RHO_HIGH = 1900.0
 
@@ -80,28 +81,12 @@ class MaxDensFlatCutAuto(_IdentFlatCut):
 
 
 # ---- (b) 履帯で4往復、ρ 1,900、maxDensity 2,000・2,578 ----
-class _PassesByEdgeX(_MaxDensityMixin, CompactionPasses):
-    """往復の折り返しを、開始位置からの直線距離ではなく、刃先の前後の位置 edge_x の進み（開始時から）で判定する。
+class _PassesByEdgeX(_MaxDensityMixin, PassesByProgressMixin, CompactionPasses):
+    """往復の折り返しを、開始位置からの直線距離ではなく、刃先の開始時の向きへの進みで判定する
+    （T31 で共通の判定 turnaround.PassesByProgressMixin に置き換えた。T12 の記録は edge_x の進みで判定したもの）。
     ex_compaction_passes の判定（obs.distance <= 0.2）では、往復で向きが少しずつずれて横に 0.2 m 以上離れると
     開始位置に戻ったと判定されず、後退し続ける（ρ 1,900・maxDensity 2,578 の1回目で、4回目の後退で起きた）"""
     name = ""   # 一覧に出さない（共通部分）
-
-    def __init__(self, seed, soil=None):
-        super().__init__(seed, soil)
-        self.x_start = None
-
-    def operation(self, obs):
-        x = obs.blade["edge_x"]
-        if self.x_start is None:
-            self.x_start = x
-        p = x - self.x_start
-        if self.forward and p >= self.LENGTH:
-            self.forward = False
-        elif not self.forward and p <= 0.2:
-            self.forward = True
-            self.count += 1
-        speed = self.SPEED if self.forward else -self.SPEED
-        return Command(speed=speed, depth=None)
 
 
 class CompactionPasses2000(_PassesByEdgeX):

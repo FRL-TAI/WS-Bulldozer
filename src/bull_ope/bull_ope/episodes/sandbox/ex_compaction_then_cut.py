@@ -20,6 +20,7 @@
 名前が "ex_compaction" で始まるので、Unity 側の CompactionProbe も地形の高さと締固めの程度を記録する。
 """
 from ..episode import Command, Episode
+from ..turnaround import ProgressTracker
 
 SOIL = {"cohesion": 2100.0, "friction_angle_deg": 39.98, "density": 1474.0}
 
@@ -74,3 +75,36 @@ class CompactionThenCut(Episode):
 
     def is_done(self, obs):
         return (self.state == "cut" and obs.distance >= self.CUT_LENGTH) or obs.t >= self.TIMEOUT
+
+# ---- T31：踏み固めの往復の折り返しを「開始時の向きへの進み」で判定する別名版
+# （decisions/2026-11-18_折り返しは進みの判定の別名版と失敗の検出で直す.md）。上のクラスの動きは変えない。
+# 削り終わりの判定（obs.distance ≥ CUT_LENGTH）はそのまま
+class CompactionThenCutV2(CompactionThenCut):
+    name = "ex_compaction_then_cut_v2"
+    description = "【実験B2】ex_compaction_then_cut と同じ。踏み固めの往復の折り返しを刃先の開始時の向きへの進みで判定する"
+    RETURN_TOL = 0.2   # 開始位置に戻ったとみなす進み [m]
+
+    def __init__(self, seed, soil=None):
+        super().__init__(seed, soil)
+        self.tracker = ProgressTracker()
+
+    def operation(self, obs):
+        p = self.tracker.progress(obs)
+        if self.state == "pass_forward" and p >= self.PASS_LENGTH:
+            self.state = "pass_backward"
+        elif self.state == "pass_backward" and p <= self.RETURN_TOL:
+            self.count += 1
+            self.state = "lower" if self.count >= self.params["round_trips"] else "pass_forward"
+        # ここから下は CompactionThenCut.operation と同じ（折り返しの判定を2回しないよう、super は呼ばない）
+        if self.state == "lower":
+            if self.t_lower is None:
+                self.t_lower = obs.t
+            if abs(obs.depth - self.DEPTH) < self.LOWER_TOLERANCE or obs.t - self.t_lower > self.LOWER_TIMEOUT:
+                self.state = "cut"
+        if self.state == "pass_forward":
+            return Command(speed=self.PASS_SPEED, depth=None)
+        if self.state == "pass_backward":
+            return Command(speed=-self.PASS_SPEED, depth=None)
+        if self.state == "lower":
+            return Command(speed=0.0, depth=self.DEPTH)
+        return Command(speed=self.CUT_SPEED, depth=self.DEPTH)
