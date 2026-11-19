@@ -5,6 +5,7 @@ notes decisions/2026-11-18_緩い側の凸を3作業の±0.03で確かめる.md
 
 使い方（コンテナの中、ワークスペース直下）:
   python3 analysis/phase1/check_compaction_j35.py --report data/phase1/compaction_j/report_t35.md [--boot 1000]
+  （T47）--dump-matrices data/phase1/compaction_j/matrices_t35.npz で、組み合わせの F と標本を書き出す（既定では書き出さない）
 
 記録・K3・J の作り方は check_compaction_j34.py（T34）と同じ（関数をそのまま使う）。T35 で足した記録：
   flat_piecewise・pile_push の 0.97・1.03（k_m0p03・k_p0p03）各 8 本、pile_push の 0.94 を 8 本（計 16 本）、
@@ -60,6 +61,7 @@ def main():
     ap.add_argument("--x-min", type=float, default=3.1, help="K3 を平均するマスの記録の座標 x の下限 [m]")
     ap.add_argument("--min-k3", type=int, default=2, help="K3 の本数がこれ未満の点は flat_cut の ΔK3 を使う")
     ap.add_argument("--report")
+    ap.add_argument("--dump-matrices", help="組み合わせの F の点推定と、ブートストラップの標本（偏りを引く前）を npz に書き出す（T47 の図用）")
     a = ap.parse_args()
     set_s_step(0.06)
     p("# 緩い側の凸を 3作業の ±0.03 で確かめる（T35）\n")
@@ -191,6 +193,7 @@ def main():
     ]
     TN, FI, FII = ["φ", "s", "K"], ["φ", "c", "ρ", "K"], ["φ", "c", "ρ"]
     summary = {}
+    dump = {}
     for side, (hi, lo) in SIDES.items():
         if not all(k in K3m[t] and k in TT[t]["mean"] and k in FT[t]["mean"] for t in TASKS for k in (hi, lo)):
             p(f"### {side}\n\n記録のない作業があるので省いた。\n")
@@ -224,6 +227,11 @@ def main():
             names_of = {n: nm.index(n) for n in nm}
             pairs = [(names_of[x], names_of[y]) for x, y in (("φ", "K"), ("s", "K")) if x in names_of and y in names_of]
             r = ctc.summarize(F0, sm, pairs)
+            if a.dump_matrices:
+                key = f"{list(SIDES).index(side)}_{[c[0] for c in combos].index(lab)}"
+                dump[f"F0_{key}"] = F0
+                dump[f"samp_{key}"] = np.array(sm)
+                dump[f"names_{key}"] = np.array(nm)
             cells = []
             for n in ALL5:
                 if n not in names_of:
@@ -254,6 +262,11 @@ def main():
             fr, v, cphik = summary[(side, m)]
             p(f"| {s0} | {how} | {m} | {fr:.0%} | " + " | ".join(f"{x:.3f}" for x in v) + f" | {cphik:+.2f} |")
     p("")
+
+    if a.dump_matrices:
+        dump["sides"] = np.array(list(SIDES))
+        dump["combos"] = np.array([c[0] for c in combos])
+        np.savez(a.dump_matrices, **dump)
 
     text = "\n".join(OUT)
     print(text)
